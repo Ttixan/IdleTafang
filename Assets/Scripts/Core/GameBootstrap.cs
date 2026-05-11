@@ -1,3 +1,5 @@
+using System;
+using IdleTafang.Gameplay;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using IdleTafang.UI;
@@ -16,6 +18,7 @@ namespace IdleTafang.Core
         private SceneFlowState runState;
         private GameInput gameInput;
         private GameTimer gameTimer;
+        private RunSession runSession;
 
         private void Awake()
         {
@@ -24,9 +27,10 @@ namespace IdleTafang.Core
             gameLoop = new GameLoop();
             gameInput = gameObject.AddComponent<GameInput>();
             gameTimer = new GameTimer();
+            runSession = new RunSession();
             bootState = new SceneFlowState(GameStateId.Boot, bootSceneName, false);
             mainMenuState = new SceneFlowState(GameStateId.MainMenu, mainMenuSceneName, true);
-            runState = new SceneFlowState(GameStateId.Run, runSceneName, true);
+            runState = new SceneFlowState(GameStateId.Run, runSceneName, true, OnRunSceneEntered);
 
             gameLoop.RegisterState(bootState);
             gameLoop.RegisterState(mainMenuState);
@@ -55,6 +59,7 @@ namespace IdleTafang.Core
 
             if (gameInput != null && gameInput.CancelPressed && gameLoop.CurrentStateId == GameStateId.Run)
             {
+                runSession.FailRun();
                 LoadMainMenu();
             }
         }
@@ -69,22 +74,31 @@ namespace IdleTafang.Core
             gameLoop.ChangeState(GameStateId.Run);
         }
 
+        private void OnRunSceneEntered()
+        {
+            runSession.Reset();
+        }
+
         private sealed class SceneFlowState : IGameState
         {
             private readonly string sceneName;
             private readonly bool loadSceneOnEnter;
+            private readonly Action onEnter;
 
-            public SceneFlowState(GameStateId id, string sceneName, bool loadSceneOnEnter)
+            public SceneFlowState(GameStateId id, string sceneName, bool loadSceneOnEnter, Action onEnter = null)
             {
                 Id = id;
                 this.sceneName = sceneName;
                 this.loadSceneOnEnter = loadSceneOnEnter;
+                this.onEnter = onEnter;
             }
 
             public GameStateId Id { get; }
 
             public void Enter()
             {
+                onEnter?.Invoke();
+
                 if (loadSceneOnEnter && !string.IsNullOrWhiteSpace(sceneName))
                 {
                     SceneManager.LoadScene(sceneName);

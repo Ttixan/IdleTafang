@@ -1,3 +1,4 @@
+using System;
 using IdleTafang.Gameplay.Builds;
 using IdleTafang.Gameplay.Resources;
 using TMPro;
@@ -14,6 +15,8 @@ namespace IdleTafang.UI
         private BuildPrototype prototype;
         private ResourceWallet wallet;
         private BuildService buildService;
+
+        public event Action BuildChanged;
 
         public void Bind(BuildPrototype prototype, ResourceWallet wallet, BuildService buildService)
         {
@@ -34,6 +37,7 @@ namespace IdleTafang.UI
             bool built = buildService.TryBuild(prototype, wallet);
             Debug.Log($"Build button clicked on {name}, built={built}, energy={wallet.Energy}, level={prototype.Level}");
             Refresh();
+            BuildChanged?.Invoke();
         }
 
         public void Refresh()
