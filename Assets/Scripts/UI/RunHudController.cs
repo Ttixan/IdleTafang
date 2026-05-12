@@ -46,6 +46,7 @@ namespace IdleTafang.UI
 
             typingSession = new TypingSession();
             wallet = new ResourceWallet();
+            wallet.AddGold(PersistentGold.Load());
             rewardCalculator = new TypingRewardCalculator();
             buildPrototype = new BuildPrototype("Basic Tower", 5);
             buildService = new BuildService();
@@ -117,8 +118,31 @@ namespace IdleTafang.UI
                 buildPanelView.BuildChanged -= OnBuildChanged;
             }
 
+            FlushPersistentGold();
+
             // Ensure subsequent scenes are not accidentally paused.
             Time.timeScale = 1f;
+        }
+
+        private void FlushPersistentGold()
+        {
+            if (wallet != null)
+            {
+                PersistentGold.Save(wallet.Gold);
+            }
+        }
+
+        private void OnApplicationQuit()
+        {
+            FlushPersistentGold();
+        }
+
+        private void OnApplicationPause(bool pauseStatus)
+        {
+            if (pauseStatus)
+            {
+                FlushPersistentGold();
+            }
         }
 
         private void OnCharacterSubmitted(char typedChar)
@@ -355,6 +379,7 @@ namespace IdleTafang.UI
         private void OnRetryClicked()
         {
             Time.timeScale = 1f;
+            FlushPersistentGold();
             Scene activeScene = SceneManager.GetActiveScene();
             SceneManager.LoadScene(activeScene.name);
         }
@@ -362,6 +387,7 @@ namespace IdleTafang.UI
         private void OnMainMenuClicked()
         {
             Time.timeScale = 1f;
+            FlushPersistentGold();
 
             if (GameBootstrap.Instance != null)
             {
