@@ -7,7 +7,6 @@ using IdleTafang.Core;
 using UnityEngine;
 using TMPro;
 using UnityEngine.SceneManagement;
-using UnityEngine.UI;
 
 namespace IdleTafang.UI
 {
@@ -17,11 +16,7 @@ namespace IdleTafang.UI
         [SerializeField] private TMP_Text debugText;
         [SerializeField] private BuildPanelView buildPanelView;
         [SerializeField] private CombatStatusPanelView combatStatusPanel;
-        [SerializeField] private GameObject gameOverPanelRoot;
-        [SerializeField] private Button retryButton;
-        [SerializeField] private Button mainMenuButton;
-        [SerializeField] private TMP_Text gameOverTitleText;
-        [SerializeField] private TMP_Text gameOverSummaryText;
+        [SerializeField] private GameOverPanelView gameOverPanelView;
 
         private TypingSession typingSession;
         private TypingInputRouter inputRouter;
@@ -75,9 +70,10 @@ namespace IdleTafang.UI
                 buildPanelView.Bind(buildPrototype, wallet, buildService);
             }
 
-            InitializeGameOverUi();
+            InitializeGameOverPanel();
 
             RefreshDebugText();
+            RefreshHud();
         }
 
         private void Update()
@@ -91,6 +87,7 @@ namespace IdleTafang.UI
 
             RefreshDebugText();
             UpdateCombatStatusPanel();
+            RefreshHud();
         }
 
         private void OnDestroy()
@@ -111,16 +108,6 @@ namespace IdleTafang.UI
                 buildPanelView.BuildChanged -= OnBuildChanged;
             }
 
-            if (retryButton != null)
-            {
-                retryButton.onClick.RemoveListener(OnRetryClicked);
-            }
-
-            if (mainMenuButton != null)
-            {
-                mainMenuButton.onClick.RemoveListener(OnMainMenuClicked);
-            }
-
             // Ensure subsequent scenes are not accidentally paused.
             Time.timeScale = 1f;
         }
@@ -134,11 +121,17 @@ namespace IdleTafang.UI
             typingSession.Reset();
 
             RefreshDebugText();
+            RefreshHud();
+            if (buildPanelView != null)
+            {
+                buildPanelView.Refresh();
+            }
         }
 
         private void OnBuildChanged()
         {
             RefreshDebugText();
+            RefreshHud();
         }
 
         private void OnWaveCompleted()
@@ -207,6 +200,18 @@ namespace IdleTafang.UI
             lastGoldReward = CalculateGoldReward(runSession.CompletedWaves, runSession.MaxWaves, waveManager.EscapedCount);
             wallet.AddGold(lastGoldReward);
             ShowRunEnd(true);
+            RefreshHud();
+        }
+
+        private void RefreshHud()
+        {
+            if (hudView == null || wallet == null)
+            {
+                return;
+            }
+
+            hudView.SetEnergy(wallet.Energy);
+            hudView.SetGold(wallet.Gold);
         }
 
         private int CalculateGoldReward(int completedWaves, int maxWaves, int escapedCount)
@@ -259,81 +264,26 @@ namespace IdleTafang.UI
             combatStatusPanel.UpdateEscapedCount(waveManager.EscapedCount);
         }
 
-        private void InitializeGameOverUi()
+        private void InitializeGameOverPanel()
         {
             gameOverShown = false;
 
-            // GameOverPanel must be placed in the scene hierarchy and bound via inspector.
-            // We keep a best-effort lookup by name for convenience, but we never create UI objects in code.
-            if (gameOverPanelRoot == null)
+            if (gameOverPanelView == null)
             {
-                gameOverPanelRoot = GameObject.Find("GameOverPanel");
-            }
-
-            if (gameOverPanelRoot != null)
-            {
-                if (retryButton == null)
+                GameObject panel = GameObject.Find("GameOverPanel");
+                if (panel != null)
                 {
-                    retryButton = gameOverPanelRoot.GetComponentInChildren<Button>(true);
+                    gameOverPanelView = panel.GetComponent<GameOverPanelView>();
                 }
-
-                if (mainMenuButton == null)
-                {
-                    Transform t = gameOverPanelRoot.transform.Find("MainMenuButton");
-                    if (t != null)
-                    {
-                        mainMenuButton = t.GetComponent<Button>();
-                    }
-                }
-
-                if (gameOverTitleText == null)
-                {
-                    TMP_Text[] texts = gameOverPanelRoot.GetComponentsInChildren<TMP_Text>(true);
-                    for (int i = 0; i < texts.Length; i++)
-                    {
-                        if (texts[i] != null && texts[i].name == "GameOverTitle")
-                        {
-                            gameOverTitleText = texts[i];
-                            break;
-                        }
-                    }
-                }
-
-                if (gameOverSummaryText == null)
-                {
-                    TMP_Text[] texts = gameOverPanelRoot.GetComponentsInChildren<TMP_Text>(true);
-                    for (int i = 0; i < texts.Length; i++)
-                    {
-                        if (texts[i] != null && texts[i].name == "GameOverSummary")
-                        {
-                            gameOverSummaryText = texts[i];
-                            break;
-                        }
-                    }
-                }
-
-                gameOverPanelRoot.SetActive(false);
             }
-            else
+
+            if (gameOverPanelView == null)
             {
-                Debug.LogError("RunHudController requires a GameOverPanel in the scene (assign gameOverPanelRoot or name it 'GameOverPanel').");
+                Debug.LogError("RunHudController requires GameOverPanelView. Add it to the GameOverPanel object and bind it in inspector.");
+                return;
             }
 
-            if (retryButton != null)
-            {
-                retryButton.onClick.RemoveListener(OnRetryClicked);
-                retryButton.onClick.AddListener(OnRetryClicked);
-            }
-            else
-            {
-                Debug.LogWarning("RunHudController could not find a Retry Button under GameOverPanel. Please bind retryButton in inspector.");
-            }
-
-            if (mainMenuButton != null)
-            {
-                mainMenuButton.onClick.RemoveListener(OnMainMenuClicked);
-                mainMenuButton.onClick.AddListener(OnMainMenuClicked);
-            }
+            gameOverPanelView.Initialize(OnRetryClicked, OnMainMenuClicked);
         }
 
         private void ShowRunEnd(bool victory)
@@ -345,23 +295,15 @@ namespace IdleTafang.UI
 
             gameOverShown = true;
 
-            if (gameOverTitleText != null)
-            {
-                gameOverTitleText.text = victory ? "VICTORY" : "GAME OVER";
-            }
+            int completed = runSession != null ? runSession.CompletedWaves : 0;
+            int max = runSession != null ? runSession.MaxWaves : 0;
+            int escaped = waveManager != null ? waveManager.EscapedCount : 0;
+            string rewardLine = victory ? $"Gold +{lastGoldReward}" : "Gold +0";
+            string summary = $"Waves: {completed}/{max}\nEscaped: {escaped}\n{rewardLine}\nTotal Gold: {wallet.Gold}";
 
-            if (gameOverSummaryText != null)
+            if (gameOverPanelView != null)
             {
-                int completed = runSession != null ? runSession.CompletedWaves : 0;
-                int max = runSession != null ? runSession.MaxWaves : 0;
-                int escaped = waveManager != null ? waveManager.EscapedCount : 0;
-                string rewardLine = victory ? $"Gold +{lastGoldReward}" : "Gold +0";
-                gameOverSummaryText.text = $"Waves: {completed}/{max}\nEscaped: {escaped}\n{rewardLine}\nTotal Gold: {wallet.Gold}";
-            }
-
-            if (gameOverPanelRoot != null)
-            {
-                gameOverPanelRoot.SetActive(true);
+                gameOverPanelView.Show(victory ? "VICTORY" : "GAME OVER", summary);
             }
 
             Time.timeScale = 0f;

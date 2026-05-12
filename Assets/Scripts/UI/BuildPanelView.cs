@@ -3,6 +3,7 @@ using IdleTafang.Gameplay.Builds;
 using IdleTafang.Gameplay.Resources;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace IdleTafang.UI
 {
@@ -11,6 +12,7 @@ namespace IdleTafang.UI
         [SerializeField] private TMP_Text titleText;
         [SerializeField] private TMP_Text costText;
         [SerializeField] private TMP_Text levelText;
+        [SerializeField] private Button buildButton;
 
         private BuildPrototype prototype;
         private ResourceWallet wallet;
@@ -47,14 +49,23 @@ namespace IdleTafang.UI
                 titleText.text = prototype != null ? prototype.Name : "Build";
             }
 
+            int cost = prototype != null ? prototype.EnergyCost : 0;
+            int energy = wallet != null ? wallet.Energy : 0;
+            bool canAfford = prototype != null && wallet != null && energy >= cost;
+
             if (costText != null)
             {
-                costText.text = prototype != null ? $"Cost: {prototype.EnergyCost}" : "Cost: -";
+                costText.text = prototype != null ? $"Cost: {cost}" : "Cost: -";
             }
 
             if (levelText != null)
             {
                 levelText.text = prototype != null ? $"Level: {prototype.Level}" : "Level: -";
+            }
+
+            if (buildButton != null)
+            {
+                buildButton.interactable = canAfford;
             }
         }
     }
