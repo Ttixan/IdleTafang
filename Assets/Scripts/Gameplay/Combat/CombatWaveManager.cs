@@ -19,6 +19,7 @@ namespace IdleTafang.Gameplay.Combat
         private int spawnedCount;
         private int escapedCount;
         private int currentBaseHealth;
+        private int maxBaseHealth;
         private bool waveCompleteLogged;
         private bool runFailedLogged;
 
@@ -26,7 +27,7 @@ namespace IdleTafang.Gameplay.Combat
         public event Action RunFailed;
 
         public int CurrentBaseHealth => currentBaseHealth;
-        public int MaxBaseHealth => Mathf.Max(1, baseHealth);
+        public int MaxBaseHealth => Mathf.Max(1, maxBaseHealth);
         public int SpawnedCount => spawnedCount;
         public int EscapedCount => escapedCount;
         public int EnemiesPerWave => Mathf.Max(1, enemiesPerWave);
@@ -34,6 +35,23 @@ namespace IdleTafang.Gameplay.Combat
         public int ActiveEnemyCount => activeEnemies.Count;
         public bool IsRunFailed => currentBaseHealth <= 0;
         public bool IsWaveComplete => spawnedCount >= EnemiesPerWave && activeEnemies.Count == 0;
+
+        public void ApplyMaxBaseHealth(int newMaxBaseHealth, bool addDeltaToCurrent)
+        {
+            int nextMax = Mathf.Max(1, newMaxBaseHealth);
+            int previousMax = Mathf.Max(1, maxBaseHealth);
+            maxBaseHealth = nextMax;
+
+            if (addDeltaToCurrent)
+            {
+                int delta = nextMax - previousMax;
+                currentBaseHealth = Mathf.Clamp(currentBaseHealth + delta, 0, maxBaseHealth);
+            }
+            else
+            {
+                currentBaseHealth = Mathf.Clamp(currentBaseHealth, 0, maxBaseHealth);
+            }
+        }
 
         public void StartNewWave()
         {
@@ -64,7 +82,8 @@ namespace IdleTafang.Gameplay.Combat
         private void Awake()
         {
             logic = new CombatWaveManagerLogic(spawnInterval);
-            currentBaseHealth = Mathf.Max(1, baseHealth);
+            maxBaseHealth = Mathf.Max(1, baseHealth);
+            currentBaseHealth = maxBaseHealth;
         }
 
         private void Update()

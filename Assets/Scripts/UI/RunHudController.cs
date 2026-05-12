@@ -28,6 +28,7 @@ namespace IdleTafang.UI
         private RunSession runSession;
         private bool gameOverShown;
         private int lastGoldReward;
+        private int initialMaxBaseHealth;
 
         private void Awake()
         {
@@ -62,6 +63,7 @@ namespace IdleTafang.UI
                 waveManager.WaveCompleted += OnWaveCompleted;
                 waveManager.RunFailed += OnRunFailed;
                 waveManager.StartNewWave();
+                initialMaxBaseHealth = waveManager.MaxBaseHealth;
             }
 
             if (buildPanelView != null)
@@ -132,6 +134,7 @@ namespace IdleTafang.UI
         {
             RefreshDebugText();
             RefreshHud();
+            ApplyUpgradeEffects();
         }
 
         private void OnWaveCompleted()
@@ -212,6 +215,22 @@ namespace IdleTafang.UI
 
             hudView.SetEnergy(wallet.Energy);
             hudView.SetGold(wallet.Gold);
+        }
+
+        private void ApplyUpgradeEffects()
+        {
+            if (waveManager == null || buildPrototype == null)
+            {
+                return;
+            }
+
+            if (initialMaxBaseHealth <= 0)
+            {
+                initialMaxBaseHealth = waveManager.MaxBaseHealth;
+            }
+
+            int targetMaxBaseHealth = initialMaxBaseHealth + buildPrototype.GetBaseHealthBonus();
+            waveManager.ApplyMaxBaseHealth(targetMaxBaseHealth, addDeltaToCurrent: true);
         }
 
         private int CalculateGoldReward(int completedWaves, int maxWaves, int escapedCount)
