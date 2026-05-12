@@ -110,6 +110,7 @@ namespace IdleTafang.Gameplay.Combat
 
                 CombatEnemy enemy = Instantiate(enemyPrefab, spawnPoint.Position, Quaternion.identity);
                 enemy.ReachedTarget += OnEnemyReachedTarget;
+                enemy.Died += OnEnemyDied;
                 enemy.SetTarget(arena.CenterPoint);
                 activeEnemies.Add(enemy);
                 spawnedCount += 1;
@@ -136,6 +137,7 @@ namespace IdleTafang.Gameplay.Combat
             }
 
             enemy.ReachedTarget -= OnEnemyReachedTarget;
+            enemy.Died -= OnEnemyDied;
             activeEnemies.Remove(enemy);
 
             escapedCount += 1;
@@ -154,6 +156,18 @@ namespace IdleTafang.Gameplay.Combat
             }
         }
 
+        private void OnEnemyDied(CombatEnemy enemy)
+        {
+            if (enemy == null)
+            {
+                return;
+            }
+
+            enemy.ReachedTarget -= OnEnemyReachedTarget;
+            enemy.Died -= OnEnemyDied;
+            activeEnemies.Remove(enemy);
+        }
+
         private void OnDestroy()
         {
             for (int i = 0; i < activeEnemies.Count; i++)
@@ -162,6 +176,7 @@ namespace IdleTafang.Gameplay.Combat
                 if (enemy != null)
                 {
                     enemy.ReachedTarget -= OnEnemyReachedTarget;
+                    enemy.Died -= OnEnemyDied;
                 }
             }
 

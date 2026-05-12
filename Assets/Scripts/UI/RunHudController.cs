@@ -25,6 +25,7 @@ namespace IdleTafang.UI
         private BuildPrototype buildPrototype;
         private BuildService buildService;
         private CombatWaveManager waveManager;
+        private ManualTurretController manualTurret;
         private RunSession runSession;
         private bool gameOverShown;
         private int lastGoldReward;
@@ -64,6 +65,12 @@ namespace IdleTafang.UI
                 waveManager.RunFailed += OnRunFailed;
                 waveManager.StartNewWave();
                 initialMaxBaseHealth = waveManager.MaxBaseHealth;
+            }
+
+            manualTurret = FindObjectOfType<ManualTurretController>();
+            if (manualTurret != null)
+            {
+                manualTurret.Bind(buildPrototype);
             }
 
             if (buildPanelView != null)

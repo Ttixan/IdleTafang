@@ -7,16 +7,24 @@ namespace IdleTafang.Gameplay.Combat
     {
         [SerializeField] private float moveSpeed = 2f;
         [SerializeField] private float reachThreshold = 0.15f;
+        [SerializeField] private int maxHealth = 5;
 
         private Transform target;
         private CombatEnemyLogic logic;
         private bool hasReachedTarget;
+        private int currentHealth;
+        private bool isDead;
 
         public event Action<CombatEnemy> ReachedTarget;
+        public event Action<CombatEnemy> Died;
+
+        public int CurrentHealth => currentHealth;
+        public int MaxHealth => Mathf.Max(1, maxHealth);
 
         private void Awake()
         {
             logic = new CombatEnemyLogic(new CombatPoint(transform.position.x, transform.position.z), moveSpeed);
+            currentHealth = MaxHealth;
         }
 
         public void SetTarget(Transform target)
@@ -33,6 +41,11 @@ namespace IdleTafang.Gameplay.Combat
         private void Update()
         {
             if (logic == null)
+            {
+                return;
+            }
+
+            if (isDead)
             {
                 return;
             }
@@ -59,6 +72,28 @@ namespace IdleTafang.Gameplay.Combat
             {
                 hasReachedTarget = true;
                 ReachedTarget?.Invoke(this);
+            }
+        }
+
+        public void TakeDamage(int damage)
+        {
+            if (isDead)
+            {
+                return;
+            }
+
+            int applied = Mathf.Max(0, damage);
+            if (applied <= 0)
+            {
+                return;
+            }
+
+            currentHealth = Mathf.Max(0, currentHealth - applied);
+            if (currentHealth <= 0)
+            {
+                isDead = true;
+                Died?.Invoke(this);
+                Destroy(gameObject);
             }
         }
     }
