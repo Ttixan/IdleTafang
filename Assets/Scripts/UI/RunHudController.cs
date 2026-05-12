@@ -222,6 +222,13 @@ namespace IdleTafang.UI
 
             hudView.SetEnergy(wallet.Energy);
             hudView.SetGold(wallet.Gold);
+            if (buildPrototype != null)
+            {
+                hudView.SetCombatStats(
+                    buildPrototype.GetTurretDamage(),
+                    buildPrototype.GetTurretFireCooldownSeconds(),
+                    buildPrototype.GetBaseHealthBonus());
+            }
         }
 
         private void ApplyUpgradeEffects()
@@ -268,8 +275,13 @@ namespace IdleTafang.UI
                 ? "Run: Unknown"
                 : $"Run: {runSession.Result} (Completed {runSession.CompletedWaves}/{runSession.MaxWaves})";
 
+            string turretLine = buildPrototype != null
+                ? $"Turret: DMG {buildPrototype.GetTurretDamage()} | CD {buildPrototype.GetTurretFireCooldownSeconds():0.00}s | Base bonus +{buildPrototype.GetBaseHealthBonus()}"
+                : "Turret: -";
+
+            int towerLv = buildPrototype != null ? buildPrototype.Level : 0;
             debugText.text =
-                $"Accuracy: {typingSession.Stats.Accuracy:P0}\nCombo: {typingSession.Stats.Combo}\nBest: {typingSession.Stats.BestCombo}\nEnergy: {wallet.Energy}\nGold: {wallet.Gold}\nTower Lv: {buildPrototype.Level}\n{combatText}\n{sessionText}";
+                $"Accuracy: {typingSession.Stats.Accuracy:P0}\nCombo: {typingSession.Stats.Combo}\nBest: {typingSession.Stats.BestCombo}\nEnergy: {wallet.Energy}\nGold: {wallet.Gold}\nTower Lv: {towerLv}\n{turretLine}\n{combatText}\n{sessionText}";
         }
 
         private void UpdateCombatStatusPanel()
@@ -325,7 +337,12 @@ namespace IdleTafang.UI
             int max = runSession != null ? runSession.MaxWaves : 0;
             int escaped = waveManager != null ? waveManager.EscapedCount : 0;
             string rewardLine = victory ? $"Gold +{lastGoldReward}" : "Gold +0";
-            string summary = $"Waves: {completed}/{max}\nEscaped: {escaped}\n{rewardLine}\nTotal Gold: {wallet.Gold}";
+            string buildLine = buildPrototype != null
+                ? $"Tower Lv {buildPrototype.Level} | Turret DMG {buildPrototype.GetTurretDamage()} | Base+{buildPrototype.GetBaseHealthBonus()}"
+                : string.Empty;
+            string summary = string.IsNullOrEmpty(buildLine)
+                ? $"Waves: {completed}/{max}\nEscaped: {escaped}\n{rewardLine}\nTotal Gold: {wallet.Gold}"
+                : $"Waves: {completed}/{max}\nEscaped: {escaped}\n{rewardLine}\n{buildLine}\nTotal Gold: {wallet.Gold}";
 
             if (gameOverPanelView != null)
             {

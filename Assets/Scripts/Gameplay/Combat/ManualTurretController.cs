@@ -7,9 +7,6 @@ namespace IdleTafang.Gameplay.Combat
     {
         [SerializeField] private Camera aimCamera;
         [SerializeField] private LayerMask hitMask = ~0;
-        [SerializeField] private float fireCooldownSeconds = 0.25f;
-        [SerializeField] private int baseDamage = 2;
-        [SerializeField] private int damagePerLevel = 1;
 
         private float cooldownTimer;
         private BuildPrototype prototype;
@@ -57,10 +54,10 @@ namespace IdleTafang.Gameplay.Combat
                 return;
             }
 
-            int level = prototype != null ? prototype.Level : 1;
-            int damage = Mathf.Max(1, baseDamage + Mathf.Max(0, level - 1) * damagePerLevel);
+            int damage = prototype != null ? prototype.GetTurretDamage() : 1;
             enemy.TakeDamage(damage);
-            cooldownTimer = Mathf.Max(0.05f, fireCooldownSeconds);
+            float cd = prototype != null ? prototype.GetTurretFireCooldownSeconds() : 0.25f;
+            cooldownTimer = Mathf.Max(0.05f, cd);
         }
     }
 }

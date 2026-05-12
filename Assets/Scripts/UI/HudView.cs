@@ -8,6 +8,7 @@ namespace IdleTafang.UI
         [SerializeField] private GameObject root;
         [SerializeField] private TMP_Text energyText;
         [SerializeField] private TMP_Text goldText;
+        [SerializeField] private TMP_Text combatStatsText;
 
         private void Awake()
         {
@@ -39,6 +40,15 @@ namespace IdleTafang.UI
                 }
             }
 
+            if (combatStatsText == null)
+            {
+                Transform t = transform.Find("CombatStatsText");
+                if (t != null)
+                {
+                    combatStatsText = t.GetComponent<TMP_Text>();
+                }
+            }
+
             if (energyText == null || goldText == null)
             {
                 Debug.LogWarning($"HudView on {name} could not find EnergyText/GoldText. Bind them in inspector or name children 'EnergyText'/'GoldText'.");
@@ -67,6 +77,18 @@ namespace IdleTafang.UI
             {
                 goldText.text = $"Gold: {gold}";
             }
+        }
+
+        /// <summary>Optional HUD line: turret damage, fire cooldown, base HP bonus from upgrades.</summary>
+        public void SetCombatStats(int turretDamage, float turretCooldownSeconds, int baseHealthBonus)
+        {
+            if (combatStatsText == null)
+            {
+                return;
+            }
+
+            combatStatsText.text =
+                $"Turret: DMG {turretDamage} | CD {turretCooldownSeconds:0.00}s | Base+{baseHealthBonus}";
         }
     }
 }
