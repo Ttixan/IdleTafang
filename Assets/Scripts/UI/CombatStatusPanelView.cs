@@ -11,6 +11,9 @@ namespace IdleTafang.UI
         [SerializeField] private Image waveProgressFillImage;
         [SerializeField] private TextMeshProUGUI waveText;
         [SerializeField] private TextMeshProUGUI escapedText;
+        [SerializeField] private float waveSmoothSpeed = 1.5f;
+
+        private float displayedWaveProgress;
 
         public void UpdateBaseHealth(int currentHealth, int maxHealth)
         {
@@ -25,11 +28,14 @@ namespace IdleTafang.UI
             }
         }
 
-        public void UpdateWaveProgress(int currentWave, int totalWaves)
+        public void UpdateWaveProgress(float normalizedProgress, int currentWave, int totalWaves)
         {
+            float targetProgress = Mathf.Clamp01(normalizedProgress);
+            displayedWaveProgress = Mathf.MoveTowards(displayedWaveProgress, targetProgress, Mathf.Max(0.01f, waveSmoothSpeed) * Time.deltaTime);
+
             if (waveProgressFillImage != null && totalWaves > 0)
             {
-                waveProgressFillImage.fillAmount = Mathf.Clamp01((float)currentWave / totalWaves);
+                waveProgressFillImage.fillAmount = displayedWaveProgress;
             }
 
             if (waveText != null)
