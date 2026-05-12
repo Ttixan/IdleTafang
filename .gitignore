@@ -2,8 +2,9 @@
 [Ll]ibrary/
 [Tt]emp/
 [Oo]bj/
-[Bb]uild/
-[Bb]uilds/
+# 仅忽略仓库根目录的导出目录，避免误伤 Assets/.../Builds 等代码文件夹
+/[Bb]uild/
+/[Bb]uilds/
 [Ll]ogs/
 [Uu]ser[Ss]ettings/
 
