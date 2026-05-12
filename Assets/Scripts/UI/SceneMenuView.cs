@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using IdleTafang.Core;
 
 namespace IdleTafang.UI
 {
@@ -18,6 +19,13 @@ namespace IdleTafang.UI
 
         public void StartGame()
         {
+            if (GameBootstrap.Instance != null)
+            {
+                GameBootstrap.Instance.LoadRunScene();
+                return;
+            }
+
+            // Allows starting MainMenu scene directly without going through Boot.
             SceneManager.LoadScene(runSceneName);
         }
 

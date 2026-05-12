@@ -8,6 +8,8 @@ namespace IdleTafang.Core
 {
     public sealed class GameBootstrap : MonoBehaviour
     {
+        public static GameBootstrap Instance { get; private set; }
+
         [SerializeField] private string bootSceneName = "Boot";
         [SerializeField] private string mainMenuSceneName = "MainMenu";
         [SerializeField] private string runSceneName = "Run";
@@ -20,8 +22,17 @@ namespace IdleTafang.Core
         private GameTimer gameTimer;
         private RunSession runSession;
 
+        public RunSession RunSession => runSession;
+
         private void Awake()
         {
+            if (Instance != null && Instance != this)
+            {
+                Destroy(gameObject);
+                return;
+            }
+
+            Instance = this;
             DontDestroyOnLoad(gameObject);
 
             gameLoop = new GameLoop();

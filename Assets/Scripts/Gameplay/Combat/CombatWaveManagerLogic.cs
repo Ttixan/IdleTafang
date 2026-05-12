@@ -12,6 +12,12 @@ namespace IdleTafang.Gameplay.Combat
             SpawnInterval = spawnInterval <= 0f ? 1f : spawnInterval;
         }
 
+        public void Reset()
+        {
+            spawnTimer = 0f;
+            spawnIndex = 0;
+        }
+
         public bool Tick(float deltaTime, int spawnPointCount, out int spawnPointIndex)
         {
             spawnPointIndex = -1;

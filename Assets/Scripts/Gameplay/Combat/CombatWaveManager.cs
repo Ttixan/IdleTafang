@@ -35,6 +35,32 @@ namespace IdleTafang.Gameplay.Combat
         public bool IsRunFailed => currentBaseHealth <= 0;
         public bool IsWaveComplete => spawnedCount >= EnemiesPerWave && activeEnemies.Count == 0;
 
+        public void StartNewWave()
+        {
+            if (logic == null)
+            {
+                logic = new CombatWaveManagerLogic(spawnInterval);
+            }
+
+            // In case StartNewWave is called early (e.g., debug hotkeys),
+            // make sure no leftovers from previous wave remain.
+            for (int i = 0; i < activeEnemies.Count; i++)
+            {
+                CombatEnemy enemy = activeEnemies[i];
+                if (enemy != null)
+                {
+                    enemy.ReachedTarget -= OnEnemyReachedTarget;
+                    Destroy(enemy.gameObject);
+                }
+            }
+            activeEnemies.Clear();
+
+            spawnedCount = 0;
+            waveCompleteLogged = false;
+            runFailedLogged = false;
+            logic.Reset();
+        }
+
         private void Awake()
         {
             logic = new CombatWaveManagerLogic(spawnInterval);
