@@ -91,6 +91,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9611c5002956a6f49b0bd65fb0325fd1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  layoutMode: 0
+  arena: {fileID: 0}
+  sectorCount: 3
+  spawnsPerSector: 3
+  spawnRadius: 22
+  spawnHeightOffset: 0
+  sectorAngleInsetDegrees: 4
   spawnPoints:
   - {fileID: 2361889717775060511}
   - {fileID: 4676859518317793069}
