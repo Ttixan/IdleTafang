@@ -16,12 +16,19 @@ namespace IdleTafang.Gameplay.Combat
         [SerializeField] private bool debugLog = false;
         [SerializeField] private float debugLogInterval = 1f;
 
+        [Header("Sector projectile visual")]
+        [SerializeField] private float projectileSpeed = 42f;
+        [SerializeField] private float projectileScale = 0.35f;
+        [SerializeField] private float projectileHitDistance = 0.65f;
+        [SerializeField] private Color projectileColor = new Color(0.35f, 0.95f, 1f, 1f);
+
         private readonly List<CombatEnemy> enemyScratch = new List<CombatEnemy>();
         private readonly List<SectorCombatEnemyInfo> enemyInfoScratch = new List<SectorCombatEnemyInfo>();
 
         private SectorFocusSystem system;
         private BuildPrototype buildPrototype;
         private float debugLogTimer;
+        private CombatArena cachedArena;
 
         public event Action<SectorFocusSnapshot> SnapshotChanged;
 
@@ -113,7 +120,15 @@ namespace IdleTafang.Gameplay.Combat
 
             if (target != null)
             {
-                target.TakeDamage(attack.Damage);
+                Vector3 spawn = GetProjectileSpawnWorldPosition();
+                SectorTurretProjectile.Spawn(
+                    spawn,
+                    target,
+                    attack.Damage,
+                    projectileSpeed,
+                    projectileScale,
+                    projectileHitDistance,
+                    projectileColor);
             }
         }
 
@@ -137,7 +152,7 @@ namespace IdleTafang.Gameplay.Combat
                 return true;
             }
 
-            CombatArena arena = FindObjectOfType<CombatArena>();
+            CombatArena arena = ResolveArena();
             if (arena != null && arena.CenterPoint != null)
             {
                 basePosition = arena.CenterPoint.position;
@@ -146,6 +161,28 @@ namespace IdleTafang.Gameplay.Combat
 
             basePosition = default;
             return false;
+        }
+
+        private CombatArena ResolveArena()
+        {
+            if (cachedArena != null)
+            {
+                return cachedArena;
+            }
+
+            cachedArena = FindObjectOfType<CombatArena>();
+            return cachedArena;
+        }
+
+        private Vector3 GetProjectileSpawnWorldPosition()
+        {
+            CombatArena arena = ResolveArena();
+            if (arena != null)
+            {
+                return arena.GetProjectileSpawnWorldPosition();
+            }
+
+            return TryResolveBasePosition(out Vector3 p) ? p + Vector3.up * 1.5f : Vector3.zero;
         }
 
         private void BuildEnemyInfos()
