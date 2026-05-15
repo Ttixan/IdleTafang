@@ -11,12 +11,11 @@ namespace IdleTafang.Gameplay.Builds
                 return false;
             }
 
-            if (wallet.Energy < prototype.EnergyCost)
+            if (!wallet.TrySpendEnergy(prototype.EnergyCost))
             {
                 return false;
             }
 
-            wallet.SpendEnergy(prototype.EnergyCost);
             prototype.Upgrade();
             return true;
         }

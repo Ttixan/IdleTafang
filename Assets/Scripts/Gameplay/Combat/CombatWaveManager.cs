@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using IdleTafang.Gameplay.Resources;
 using UnityEngine;
 
 namespace IdleTafang.Gameplay.Combat
@@ -23,6 +24,7 @@ namespace IdleTafang.Gameplay.Combat
         private bool waveCompleteLogged;
         private bool runFailedLogged;
         private bool combatActive;
+        private int leakDamageReductionStacks;
 
         public event Action WaveCompleted;
         public event Action RunFailed;
@@ -38,6 +40,34 @@ namespace IdleTafang.Gameplay.Combat
         public bool IsWaveComplete => spawnedCount >= EnemiesPerWave && activeEnemies.Count == 0;
 
         public bool IsCombatActive => combatActive;
+
+        /// <summary>漏怪伤害每层减少量（整局叠加，由波间强化写入）。</summary>
+        public void SetLeakDamageReductionStacks(int stacks)
+        {
+            leakDamageReductionStacks = Mathf.Max(0, stacks);
+        }
+
+        /// <summary>E3：消耗 Energy 回复基地生命（不超过上限）。</summary>
+        public bool TryRepairBase(ResourceWallet wallet, int energyCost, int healAmount)
+        {
+            if (wallet == null || healAmount <= 0 || energyCost <= 0)
+            {
+                return false;
+            }
+
+            if (currentBaseHealth >= maxBaseHealth)
+            {
+                return false;
+            }
+
+            if (!wallet.TrySpendEnergy(energyCost))
+            {
+                return false;
+            }
+
+            currentBaseHealth = Mathf.Min(maxBaseHealth, currentBaseHealth + healAmount);
+            return true;
+        }
 
         public void CopyActiveEnemies(List<CombatEnemy> buffer)
         {
@@ -189,7 +219,8 @@ namespace IdleTafang.Gameplay.Combat
             activeEnemies.Remove(enemy);
 
             escapedCount += 1;
-            currentBaseHealth = Mathf.Max(0, currentBaseHealth - Mathf.Max(1, enemyDamageOnReach));
+            int leak = Mathf.Max(0, enemyDamageOnReach - leakDamageReductionStacks);
+            currentBaseHealth = Mathf.Max(0, currentBaseHealth - leak);
 
             Destroy(enemy.gameObject);
 

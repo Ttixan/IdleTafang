@@ -29,6 +29,7 @@ namespace IdleTafang.Gameplay.Combat
         private BuildPrototype buildPrototype;
         private float debugLogTimer;
         private CombatArena cachedArena;
+        private float sectorBuffDamageMultiplier = 1f;
 
         public event Action<SectorFocusSnapshot> SnapshotChanged;
 
@@ -51,6 +52,11 @@ namespace IdleTafang.Gameplay.Combat
         public void ResetFocus()
         {
             system?.ResetFocus();
+        }
+
+        public void SetSectorBuffDamageMultiplier(float multiplier)
+        {
+            sectorBuffDamageMultiplier = Mathf.Max(0f, multiplier);
         }
 
         private void Awake()
@@ -121,10 +127,11 @@ namespace IdleTafang.Gameplay.Combat
             if (target != null)
             {
                 Vector3 spawn = GetProjectileSpawnWorldPosition();
+                int scaledDamage = Mathf.Max(1, Mathf.RoundToInt(attack.Damage * sectorBuffDamageMultiplier));
                 SectorTurretProjectile.Spawn(
                     spawn,
                     target,
-                    attack.Damage,
+                    scaledDamage,
                     projectileSpeed,
                     projectileScale,
                     projectileHitDistance,

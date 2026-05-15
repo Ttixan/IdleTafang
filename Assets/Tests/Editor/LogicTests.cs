@@ -84,6 +84,57 @@ namespace IdleTafang.Tests.Editor
         }
 
         [Test]
+        public void ResourceWallet_TrySpendEnergy_DoesNotPartialSpend_OnInsufficientBalance()
+        {
+            ResourceWallet wallet = new ResourceWallet();
+            wallet.AddEnergy(5);
+
+            Assert.That(wallet.TrySpendEnergy(6), Is.False);
+            Assert.That(wallet.Energy, Is.EqualTo(5));
+
+            Assert.That(wallet.TrySpendEnergy(5), Is.True);
+            Assert.That(wallet.Energy, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void RunBuffState_StacksSectorMultiplierAndDiscounts()
+        {
+            RunBuffState buff = new RunBuffState();
+            Assert.That(buff.SectorProjectileDamageMultiplier, Is.EqualTo(1f).Within(0.001f));
+
+            buff.ApplyOffer(IntermissionBuffCatalog.All[0]);
+            Assert.That(buff.SectorProjectileDamageMultiplier, Is.EqualTo(1.1f).Within(0.001f));
+
+            buff.ApplyOffer(IntermissionBuffCatalog.All[1]);
+            Assert.That(buff.DiscountSpecialEnergyCost(5), Is.EqualTo(4));
+
+            buff.ApplyOffer(IntermissionBuffCatalog.All[2]);
+            Assert.That(buff.LeakDamageMinusStacks, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void IntermissionBuffCatalog_FillThreeShuffledOffers_IsPermutationOfCatalog()
+        {
+            IntermissionBuffOffer[] rolled = new IntermissionBuffOffer[3];
+            IntermissionBuffCatalog.FillThreeShuffledOffers(new System.Random(42), rolled);
+
+            for (int i = 0; i < IntermissionBuffCatalog.All.Length; i++)
+            {
+                string id = IntermissionBuffCatalog.All[i].Id;
+                int found = 0;
+                for (int j = 0; j < rolled.Length; j++)
+                {
+                    if (rolled[j].Id == id)
+                    {
+                        found++;
+                    }
+                }
+
+                Assert.That(found, Is.EqualTo(1));
+            }
+        }
+
+        [Test]
         public void BuildPrototype_NormalizesInput_AndUpgrades()
         {
             BuildPrototype prototype = new BuildPrototype(null, -5);

@@ -21,6 +21,23 @@ namespace IdleTafang.Gameplay.Resources
             }
         }
 
+        public bool TrySpendEnergy(int amount)
+        {
+            if (amount <= 0)
+            {
+                return true;
+            }
+
+            if (Energy < amount)
+            {
+                return false;
+            }
+
+            Energy -= amount;
+            return true;
+        }
+
+        /// <summary>扣除能量；不足时清零（遗留行为，新逻辑请用 <see cref="TrySpendEnergy"/>）。</summary>
         public void SpendEnergy(int amount)
         {
             if (amount > 0)

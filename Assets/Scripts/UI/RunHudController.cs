@@ -1,3 +1,4 @@
+using System.Collections;
 using IdleTafang.Gameplay;
 using IdleTafang.Gameplay.Typing;
 using IdleTafang.Gameplay.Builds;
@@ -18,6 +19,13 @@ namespace IdleTafang.UI
         [SerializeField] private CombatStatusPanelView combatStatusPanel;
         [SerializeField] private GameOverPanelView gameOverPanelView;
 
+        [Header("Wave intermission shop (E2–E6)")]
+        [Tooltip("留空则在运行时挂到主 Canvas 下自动生成波间面板。")]
+        [SerializeField] private WaveIntermissionPanelView waveIntermissionPanel;
+
+        [SerializeField] private int repairBaseEnergyCost = 10;
+        [SerializeField] private int repairBaseHealAmount = 1;
+
         private TypingSession typingSession;
         private TypingInputRouter inputRouter;
         private ResourceWallet wallet;
@@ -29,9 +37,17 @@ namespace IdleTafang.UI
         private SectorFocusPresenter sectorPresenter;
         private ManualTurretController manualTurret;
         private RunSession runSession;
+        private readonly RunBuffState runBuffState = new RunBuffState();
+        private readonly IntermissionBuffOffer[] rolledBuffOffers = new IntermissionBuffOffer[3];
+        private System.Random buffRng;
         private bool gameOverShown;
         private int lastGoldReward;
         private int initialMaxBaseHealth;
+        private Coroutine waveIntermissionCoroutine;
+        private bool waveIntermissionActive;
+        private bool intermissionContinueRequested;
+        private bool intermissionBuffChosen;
+        private bool intermissionPanelEventsWired;
 
         private void Awake()
         {
@@ -54,6 +70,8 @@ namespace IdleTafang.UI
             buildService = new BuildService();
             runSession = TryGetRunSession();
             runSession.Reset();
+            runBuffState.Reset();
+            buffRng = new System.Random();
             lastGoldReward = 0;
 
             inputRouter = FindObjectOfType<TypingInputRouter>();
@@ -89,7 +107,7 @@ namespace IdleTafang.UI
             manualTurret = FindObjectOfType<ManualTurretController>();
             if (manualTurret != null)
             {
-                manualTurret.Bind(buildPrototype);
+                manualTurret.Bind(buildPrototype, wallet, runBuffState);
             }
 
             if (buildPanelView != null)
@@ -102,6 +120,125 @@ namespace IdleTafang.UI
 
             RefreshDebugText();
             RefreshHud();
+            SyncCombatBuffModifiers();
+        }
+
+        private WaveIntermissionPanelView ResolveIntermissionPanel()
+        {
+            if (waveIntermissionPanel != null)
+            {
+                return waveIntermissionPanel;
+            }
+
+            Canvas canvas = FindObjectOfType<Canvas>();
+            waveIntermissionPanel = WaveIntermissionPanelView.EnsureUnderCanvas(canvas, null);
+            return waveIntermissionPanel;
+        }
+
+        private void EnsureIntermissionPanelWired()
+        {
+            WaveIntermissionPanelView panel = ResolveIntermissionPanel();
+            if (panel == null || intermissionPanelEventsWired)
+            {
+                return;
+            }
+
+            panel.RepairClicked += OnIntermissionRepairClicked;
+            panel.BuffClicked += OnIntermissionBuffClicked;
+            panel.ContinueClicked += OnIntermissionContinueClicked;
+            intermissionPanelEventsWired = true;
+        }
+
+        private void OnIntermissionContinueClicked()
+        {
+            if (!waveIntermissionActive)
+            {
+                return;
+            }
+
+            intermissionContinueRequested = true;
+        }
+
+        private void OnIntermissionRepairClicked()
+        {
+            if (!waveIntermissionActive || waveManager == null || wallet == null)
+            {
+                return;
+            }
+
+            waveManager.TryRepairBase(wallet, repairBaseEnergyCost, repairBaseHealAmount);
+            RefreshHud();
+            RefreshDebugText();
+        }
+
+        private void OnIntermissionBuffClicked(int index)
+        {
+            if (!waveIntermissionActive || intermissionBuffChosen || wallet == null || (uint)index >= 3)
+            {
+                return;
+            }
+
+            IntermissionBuffOffer offer = rolledBuffOffers[index];
+            if (!wallet.TrySpendEnergy(offer.EnergyCost))
+            {
+                return;
+            }
+
+            runBuffState.ApplyOffer(offer);
+            intermissionBuffChosen = true;
+            SyncCombatBuffModifiers();
+            RefreshHud();
+            RefreshDebugText();
+        }
+
+        private void RefreshIntermissionPanelUi()
+        {
+            WaveIntermissionPanelView panel = ResolveIntermissionPanel();
+            if (panel == null || runSession == null || wallet == null || waveManager == null)
+            {
+                return;
+            }
+
+            int nextWave = Mathf.Clamp(runSession.CompletedWaves + 1, 1, runSession.MaxWaves);
+
+            panel.SetTexts(
+                "Wave break — spend Energy, then tap Continue.",
+                $"Energy: {wallet.Energy}",
+                $"Next wave: {nextWave} / {runSession.MaxWaves}",
+                intermissionBuffChosen
+                    ? "Buff locked for this break. You can still repair the base. Tap Continue when ready."
+                    : "Pick ONE buff below (optional). Repair if needed. Tap Continue to start the next wave.");
+
+            bool canRepair = wallet.Energy >= repairBaseEnergyCost
+                && waveManager.CurrentBaseHealth < waveManager.MaxBaseHealth;
+            panel.SetRepairButton($"Repair base ({repairBaseEnergyCost} E → +{repairBaseHealAmount} HP)", canRepair);
+            panel.SetContinueButtonInteractable(true);
+
+            for (int i = 0; i < 3; i++)
+            {
+                IntermissionBuffOffer o = rolledBuffOffers[i];
+                string label = $"{o.DisplayName}\n{o.Rarity} · {o.EnergyCost} E";
+                bool canPick = !intermissionBuffChosen && wallet.Energy >= o.EnergyCost;
+                panel.SetBuffSlot(i, label, canPick);
+            }
+        }
+
+        private void SyncCombatBuffModifiers()
+        {
+            if (waveManager != null)
+            {
+                waveManager.SetLeakDamageReductionStacks(runBuffState.LeakDamageMinusStacks);
+            }
+
+            if (sectorCombat != null)
+            {
+                sectorCombat.SetSectorBuffDamageMultiplier(runBuffState.SectorProjectileDamageMultiplier);
+            }
+
+            if (manualTurret != null)
+            {
+                manualTurret.Bind(buildPrototype, wallet, runBuffState);
+            }
         }
 
         private void Update()
@@ -113,9 +250,16 @@ namespace IdleTafang.UI
                 runSession = TryGetRunSession();
             }
 
+            SyncCombatBuffModifiers();
+
             if (runSession != null && runSession.Phase.CurrentPhase == RunPhase.Preparation && Input.GetButtonDown("Submit"))
             {
                 TryBeginCombat();
+            }
+
+            if (waveIntermissionActive && runSession != null && runSession.Phase.CanRunCombat && Input.GetButtonDown("Submit"))
+            {
+                intermissionContinueRequested = true;
             }
 
             RefreshDebugText();
@@ -136,6 +280,17 @@ namespace IdleTafang.UI
                 waveManager.WaveCompleted -= OnWaveCompleted;
                 waveManager.RunFailed -= OnRunFailed;
             }
+
+            StopWaveIntermissionCoroutine();
+
+            if (waveIntermissionPanel != null && intermissionPanelEventsWired)
+            {
+                waveIntermissionPanel.RepairClicked -= OnIntermissionRepairClicked;
+                waveIntermissionPanel.BuffClicked -= OnIntermissionBuffClicked;
+                waveIntermissionPanel.ContinueClicked -= OnIntermissionContinueClicked;
+            }
+
+            intermissionPanelEventsWired = false;
 
             if (buildPanelView != null)
             {
@@ -205,6 +360,7 @@ namespace IdleTafang.UI
             RefreshDebugText();
             RefreshHud();
             ApplyUpgradeEffects();
+            SyncCombatBuffModifiers();
         }
 
         private void OnWaveCompleted()
@@ -217,6 +373,7 @@ namespace IdleTafang.UI
             runSession.AdvanceWave();
             if (runSession.CompletedWaves >= runSession.MaxWaves)
             {
+                StopWaveIntermissionCoroutine();
                 runSession.CompleteRun();
                 HandleVictory();
             }
@@ -224,10 +381,83 @@ namespace IdleTafang.UI
             {
                 if (waveManager != null && !waveManager.IsRunFailed)
                 {
-                    waveManager.StartNewWave();
+                    StopWaveIntermissionCoroutine();
+                    waveIntermissionCoroutine = StartCoroutine(WaveIntermissionThenStartNextWave());
                 }
             }
+
             RefreshDebugText();
+        }
+
+        private IEnumerator WaveIntermissionThenStartNextWave()
+        {
+            waveIntermissionActive = true;
+            intermissionContinueRequested = false;
+            intermissionBuffChosen = false;
+            IntermissionBuffCatalog.FillThreeShuffledOffers(buffRng, rolledBuffOffers);
+
+            if (waveManager != null)
+            {
+                waveManager.SetCombatActive(false);
+            }
+
+            EnsureIntermissionPanelWired();
+            WaveIntermissionPanelView panel = ResolveIntermissionPanel();
+            panel?.SetVisible(true);
+
+            while (!intermissionContinueRequested)
+            {
+                if (runSession == null || runSession.IsFinished || !runSession.Phase.CanRunCombat)
+                {
+                    break;
+                }
+
+                if (waveManager != null && waveManager.IsRunFailed)
+                {
+                    break;
+                }
+
+                SyncCombatBuffModifiers();
+                RefreshIntermissionPanelUi();
+                yield return null;
+            }
+
+            panel?.SetVisible(false);
+
+            waveIntermissionCoroutine = null;
+            waveIntermissionActive = false;
+            intermissionContinueRequested = false;
+
+            if (runSession == null || runSession.IsFinished || !runSession.Phase.CanRunCombat)
+            {
+                yield break;
+            }
+
+            if (waveManager == null || waveManager.IsRunFailed)
+            {
+                yield break;
+            }
+
+            waveManager.SetCombatActive(true);
+            waveManager.StartNewWave();
+            SyncCombatBuffModifiers();
+            RefreshDebugText();
+        }
+
+        private void StopWaveIntermissionCoroutine()
+        {
+            if (waveIntermissionCoroutine != null)
+            {
+                StopCoroutine(waveIntermissionCoroutine);
+                waveIntermissionCoroutine = null;
+            }
+
+            waveIntermissionActive = false;
+            intermissionContinueRequested = false;
+            if (waveIntermissionPanel != null)
+            {
+                waveIntermissionPanel.SetVisible(false);
+            }
         }
 
         private RunSession TryGetRunSession()
@@ -252,6 +482,8 @@ namespace IdleTafang.UI
 
         private void OnRunFailed()
         {
+            StopWaveIntermissionCoroutine();
+
             if (runSession == null || runSession.IsFinished)
             {
                 return;
@@ -284,6 +516,8 @@ namespace IdleTafang.UI
             {
                 return;
             }
+
+            StopWaveIntermissionCoroutine();
 
             sectorCombat?.ResetFocus();
 
@@ -398,6 +632,12 @@ namespace IdleTafang.UI
 
         private string BuildCombatPhaseHint()
         {
+            if (waveIntermissionActive)
+            {
+                int nextWave = Mathf.Clamp(runSession.CompletedWaves + 1, 1, runSession.MaxWaves);
+                return $"Wave break — next {nextWave}/{runSession.MaxWaves} | Energy {wallet?.Energy ?? 0} | Tap Continue in panel";
+            }
+
             int wave = Mathf.Clamp(runSession.CompletedWaves + 1, 1, runSession.MaxWaves);
             string line = $"Wave {wave}/{runSession.MaxWaves} | A/D = sector";
 
@@ -492,9 +732,11 @@ namespace IdleTafang.UI
                 ? $"Turret: DMG {buildPrototype.GetTurretDamage()} | CD {buildPrototype.GetTurretFireCooldownSeconds():0.00}s | Base bonus +{buildPrototype.GetBaseHealthBonus()}"
                 : "Turret: -";
 
+            string buffLine = runBuffState.BuildSummaryLine();
+
             int towerLv = buildPrototype != null ? buildPrototype.Level : 0;
             debugText.text =
-                $"Accuracy: {typingSession.Stats.Accuracy:P0}\nCombo: {typingSession.Stats.Combo}\nBest: {typingSession.Stats.BestCombo}\nEnergy: {wallet.Energy}\nGold: {wallet.Gold}\nTower Lv: {towerLv}\n{turretLine}\n{phaseText}\n{combatText}\n{sessionText}";
+                $"Accuracy: {typingSession.Stats.Accuracy:P0}\nCombo: {typingSession.Stats.Combo}\nBest: {typingSession.Stats.BestCombo}\nEnergy: {wallet.Energy}\nGold: {wallet.Gold}\nTower Lv: {towerLv}\n{turretLine}\n{buffLine}\n{phaseText}\n{combatText}\n{sessionText}";
         }
 
         private void UpdateCombatStatusPanel()
@@ -508,6 +750,16 @@ namespace IdleTafang.UI
             {
                 combatStatusPanel.UpdateBaseHealth(waveManager.CurrentBaseHealth, waveManager.MaxBaseHealth);
                 combatStatusPanel.UpdateWaveProgress(0f, 0, runSession.MaxWaves);
+                combatStatusPanel.UpdateEscapedCount(waveManager.EscapedCount);
+                return;
+            }
+
+            if (waveIntermissionActive)
+            {
+                float betweenWaves = Mathf.Clamp01((float)runSession.CompletedWaves / runSession.MaxWaves);
+                int nextWave = Mathf.Clamp(runSession.CompletedWaves + 1, 1, runSession.MaxWaves);
+                combatStatusPanel.UpdateBaseHealth(waveManager.CurrentBaseHealth, waveManager.MaxBaseHealth);
+                combatStatusPanel.UpdateWaveProgress(betweenWaves, nextWave, runSession.MaxWaves);
                 combatStatusPanel.UpdateEscapedCount(waveManager.EscapedCount);
                 return;
             }
@@ -552,6 +804,8 @@ namespace IdleTafang.UI
                 return;
             }
 
+            StopWaveIntermissionCoroutine();
+
             gameOverShown = true;
 
             if (runSession != null && runSession.Phase.CurrentPhase != RunPhase.Settlement)
@@ -571,9 +825,15 @@ namespace IdleTafang.UI
             string buildLine = buildPrototype != null
                 ? $"Tower Lv {buildPrototype.Level} | Turret DMG {buildPrototype.GetTurretDamage()} | Base+{buildPrototype.GetBaseHealthBonus()}"
                 : string.Empty;
+            string buffLine = runBuffState.BuildSummaryLine();
             string summary = string.IsNullOrEmpty(buildLine)
                 ? $"Waves: {completed}/{max}\nEscaped: {escaped}\n{rewardLine}\nTotal Gold: {wallet.Gold}"
                 : $"Waves: {completed}/{max}\nEscaped: {escaped}\n{rewardLine}\n{buildLine}\nTotal Gold: {wallet.Gold}";
+
+            if (!string.IsNullOrEmpty(buffLine))
+            {
+                summary += $"\n{buffLine}";
+            }
 
             if (gameOverPanelView != null)
             {
