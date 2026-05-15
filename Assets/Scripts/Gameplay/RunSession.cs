@@ -10,11 +10,13 @@ namespace IdleTafang.Gameplay
     public sealed class RunSession
     {
         private const int TotalWaves = 5;
+        private readonly RunPhaseController phaseController = new RunPhaseController();
 
         public int WaveIndex { get; private set; }
         public int CompletedWaves { get; private set; }
         public int MaxWaves => TotalWaves;
         public RunResult Result { get; private set; } = RunResult.InProgress;
+        public RunPhaseController Phase => phaseController;
 
         public bool IsFinished => Result != RunResult.InProgress;
 
@@ -23,6 +25,7 @@ namespace IdleTafang.Gameplay
             WaveIndex = 0;
             CompletedWaves = 0;
             Result = RunResult.InProgress;
+            phaseController.Reset();
         }
 
         public void AdvanceWave()

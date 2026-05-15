@@ -168,6 +168,114 @@ namespace IdleTafang.Tests.Editor
             Assert.That(session.CompletedWaves, Is.EqualTo(0));
             Assert.That(session.Result, Is.EqualTo(RunResult.InProgress));
             Assert.That(session.IsFinished, Is.False);
+            Assert.That(session.Phase.CurrentPhase, Is.EqualTo(RunPhase.Preparation));
+        }
+
+        [Test]
+        public void RunPhaseController_GatesEnergyAndCombatTransitions()
+        {
+            RunPhaseController phase = new RunPhaseController();
+            int changeCount = 0;
+            phase.PhaseChanged += _ => changeCount += 1;
+
+            Assert.That(phase.CurrentPhase, Is.EqualTo(RunPhase.Preparation));
+            Assert.That(phase.CanEarnEnergy, Is.True);
+            Assert.That(phase.CanRunCombat, Is.False);
+
+            Assert.That(phase.TryBeginCombat(), Is.True);
+            Assert.That(phase.CurrentPhase, Is.EqualTo(RunPhase.Combat));
+            Assert.That(phase.CanEarnEnergy, Is.False);
+            Assert.That(phase.CanRunCombat, Is.True);
+            Assert.That(phase.TryBeginCombat(), Is.False);
+
+            phase.EnterSettlement();
+            Assert.That(phase.IsFinished, Is.True);
+            Assert.That(phase.CanRunCombat, Is.False);
+
+            phase.Reset();
+            Assert.That(phase.CurrentPhase, Is.EqualTo(RunPhase.Preparation));
+            Assert.That(changeCount, Is.EqualTo(3));
+        }
+
+        [Test]
+        public void SectorMath_MapsAnglesToThreeSectors()
+        {
+            Assert.That(SectorMath.GetSectorIndex(0f, 0f, 0f, 10f, 3), Is.EqualTo(0));
+            Assert.That(SectorMath.GetSectorIndex(0f, 0f, 0f, -10f, 3), Is.EqualTo(1));
+            Assert.That(SectorMath.GetSectorIndex(0f, 0f, -10f, 0f, 3), Is.EqualTo(2));
+        }
+
+        [Test]
+        public void SectorFocusLogic_SwitchAppliesWarmup()
+        {
+            SectorFocusLogic focus = new SectorFocusLogic(3, 0.5f, 0);
+
+            focus.FocusNext();
+            Assert.That(focus.FocusedSector, Is.EqualTo(1));
+            Assert.That(focus.IsReady, Is.False);
+            Assert.That(focus.WarmupRemaining, Is.EqualTo(0.5f).Within(0.0001f));
+
+            focus.Tick(0.5f);
+            Assert.That(focus.IsReady, Is.True);
+
+            focus.FocusPrevious();
+            Assert.That(focus.FocusedSector, Is.EqualTo(0));
+            Assert.That(focus.IsReady, Is.False);
+        }
+
+        [Test]
+        public void SectorTargetSelector_PicksNearestEnemyInSector()
+        {
+            var enemies = new[]
+            {
+                new SectorCombatEnemyInfo(1, 0f, 8f),
+                new SectorCombatEnemyInfo(2, 0f, 4f),
+                new SectorCombatEnemyInfo(3, 0f, -8f)
+            };
+
+            bool found = SectorTargetSelector.TrySelectNearestInSector(enemies, 0f, 0f, 0, 3, out int selectedId);
+
+            Assert.That(found, Is.True);
+            Assert.That(selectedId, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void SectorTargetSelector_AcceptsNegativeIds()
+        {
+            var enemies = new[]
+            {
+                new SectorCombatEnemyInfo(-42, 0f, 5f)
+            };
+
+            bool found = SectorTargetSelector.TrySelectNearestInSector(enemies, 0f, 0f, 0, 3, out int selectedId);
+
+            Assert.That(found, Is.True);
+            Assert.That(selectedId, Is.EqualTo(-42));
+        }
+
+        [Test]
+        public void SectorFocusSystem_ReturnsAttackWhenReadyAndTargetExists()
+        {
+            SectorFocusSystem system = new SectorFocusSystem(3, 0f, 2, 0.5f);
+            system.SetCombatEnabled(true);
+            var enemies = new[] { new SectorCombatEnemyInfo(10, 0f, 5f) };
+
+            SectorAttackCommand attack = system.Tick(0f, 0f, 0f, enemies, combatActive: true);
+
+            Assert.That(attack.HasAttack, Is.True);
+            Assert.That(attack.TargetId, Is.EqualTo(10));
+            Assert.That(attack.Damage, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void SectorFocusSystem_AttacksWhenCombatActiveEvenIfEnableFlagWasMissed()
+        {
+            SectorFocusSystem system = new SectorFocusSystem(3, 0f, 2, 0.5f);
+            var enemies = new[] { new SectorCombatEnemyInfo(10, 0f, 5f) };
+
+            SectorAttackCommand attack = system.Tick(0f, 0f, 0f, enemies, combatActive: true);
+
+            Assert.That(attack.HasAttack, Is.True);
         }
 
         [Test]

@@ -25,6 +25,8 @@ namespace IdleTafang.UI
         private BuildPrototype buildPrototype;
         private BuildService buildService;
         private CombatWaveManager waveManager;
+        private SectorFocusCombatAdapter sectorCombat;
+        private SectorFocusPresenter sectorPresenter;
         private ManualTurretController manualTurret;
         private RunSession runSession;
         private bool gameOverShown;
@@ -51,6 +53,7 @@ namespace IdleTafang.UI
             buildPrototype = new BuildPrototype("Basic Tower", 5);
             buildService = new BuildService();
             runSession = TryGetRunSession();
+            runSession.Reset();
             lastGoldReward = 0;
 
             inputRouter = FindObjectOfType<TypingInputRouter>();
@@ -64,8 +67,23 @@ namespace IdleTafang.UI
             {
                 waveManager.WaveCompleted += OnWaveCompleted;
                 waveManager.RunFailed += OnRunFailed;
-                waveManager.StartNewWave();
+                waveManager.SetCombatActive(false);
                 initialMaxBaseHealth = waveManager.MaxBaseHealth;
+
+                sectorCombat = waveManager.GetComponent<SectorFocusCombatAdapter>();
+                if (sectorCombat == null)
+                {
+                    sectorCombat = waveManager.gameObject.AddComponent<SectorFocusCombatAdapter>();
+                }
+
+                sectorCombat.Bind(waveManager, buildPrototype);
+                SetupSectorPresentation();
+            }
+
+            if (runSession != null)
+            {
+                runSession.Phase.PhaseChanged += OnRunPhaseChanged;
+                ApplyRunPhase(runSession.Phase.CurrentPhase);
             }
 
             manualTurret = FindObjectOfType<ManualTurretController>();
@@ -95,9 +113,15 @@ namespace IdleTafang.UI
                 runSession = TryGetRunSession();
             }
 
+            if (runSession != null && runSession.Phase.CurrentPhase == RunPhase.Preparation && Input.GetButtonDown("Submit"))
+            {
+                TryBeginCombat();
+            }
+
             RefreshDebugText();
             UpdateCombatStatusPanel();
             RefreshHud();
+            RefreshPhaseHud();
         }
 
         private void OnDestroy()
@@ -116,6 +140,11 @@ namespace IdleTafang.UI
             if (buildPanelView != null)
             {
                 buildPanelView.BuildChanged -= OnBuildChanged;
+            }
+
+            if (runSession != null)
+            {
+                runSession.Phase.PhaseChanged -= OnRunPhaseChanged;
             }
 
             FlushPersistentGold();
@@ -147,6 +176,11 @@ namespace IdleTafang.UI
 
         private void OnCharacterSubmitted(char typedChar)
         {
+            if (runSession == null || !runSession.Phase.CanEarnEnergy)
+            {
+                return;
+            }
+
             typingSession.SubmitCharacter(typedChar);
 
             int energyReward = rewardCalculator.CalculateEnergyReward(typingSession.Stats);
@@ -163,6 +197,11 @@ namespace IdleTafang.UI
 
         private void OnBuildChanged()
         {
+            if (sectorCombat != null)
+            {
+                sectorCombat.Bind(waveManager, buildPrototype);
+            }
+
             RefreshDebugText();
             RefreshHud();
             ApplyUpgradeEffects();
@@ -170,7 +209,7 @@ namespace IdleTafang.UI
 
         private void OnWaveCompleted()
         {
-            if (runSession == null || runSession.IsFinished)
+            if (runSession == null || runSession.IsFinished || !runSession.Phase.CanRunCombat)
             {
                 return;
             }
@@ -219,6 +258,7 @@ namespace IdleTafang.UI
             }
 
             runSession.FailRun();
+            runSession.Phase.EnterSettlement();
             ShowRunEnd(false);
             RefreshDebugText();
         }
@@ -233,8 +273,153 @@ namespace IdleTafang.UI
 
             lastGoldReward = CalculateGoldReward(runSession.CompletedWaves, runSession.MaxWaves, waveManager.EscapedCount);
             wallet.AddGold(lastGoldReward);
+            runSession.Phase.EnterSettlement();
             ShowRunEnd(true);
             RefreshHud();
+        }
+
+        private void TryBeginCombat()
+        {
+            if (runSession == null || runSession.IsFinished || !runSession.Phase.TryBeginCombat())
+            {
+                return;
+            }
+
+            sectorCombat?.ResetFocus();
+
+            if (waveManager != null)
+            {
+                waveManager.StartNewWave();
+            }
+        }
+
+        private void OnRunPhaseChanged(RunPhase phase)
+        {
+            ApplyRunPhase(phase);
+            RefreshPhaseHud();
+        }
+
+        private void ApplyRunPhase(RunPhase phase)
+        {
+            bool preparation = phase == RunPhase.Preparation;
+            bool combat = phase == RunPhase.Combat;
+            bool settlement = phase == RunPhase.Settlement;
+
+            if (waveManager != null)
+            {
+                waveManager.SetCombatActive(combat);
+            }
+
+            if (manualTurret != null)
+            {
+                manualTurret.SetInteractionMode(
+                    fireEnabled: preparation || combat,
+                    enemyDamageEnabled: combat);
+            }
+
+            if (sectorCombat != null)
+            {
+                sectorCombat.SetCombatEnabled(combat);
+                if (combat)
+                {
+                    sectorCombat.System?.SetCombatEnabled(true);
+                }
+            }
+
+            sectorPresenter?.SetVisible(combat);
+        }
+
+        private void SetupSectorPresentation()
+        {
+            if (sectorCombat == null)
+            {
+                return;
+            }
+
+            SectorFocusHudView sectorHud = FindObjectOfType<SectorFocusHudView>();
+            SectorFocusWorldView worldView = FindObjectOfType<SectorFocusWorldView>();
+            CombatArena arena = FindObjectOfType<CombatArena>();
+
+            if (sectorHud == null)
+            {
+                Canvas canvas = FindObjectOfType<Canvas>();
+                if (canvas != null)
+                {
+                    GameObject hudObject = new GameObject("SectorFocusHud", typeof(RectTransform), typeof(SectorFocusHudView));
+                    RectTransform rect = hudObject.GetComponent<RectTransform>();
+                    rect.SetParent(canvas.transform, false);
+                    rect.anchorMin = new Vector2(0.5f, 0f);
+                    rect.anchorMax = new Vector2(0.5f, 0f);
+                    rect.pivot = new Vector2(0.5f, 0f);
+                    rect.anchoredPosition = new Vector2(0f, 120f);
+                    rect.sizeDelta = new Vector2(220f, 64f);
+                    sectorHud = hudObject.GetComponent<SectorFocusHudView>();
+                }
+            }
+
+            if (worldView == null)
+            {
+                Transform parent = arena != null && arena.CenterPoint != null
+                    ? arena.CenterPoint
+                    : waveManager != null ? waveManager.transform : transform;
+                GameObject worldObject = new GameObject("SectorFocusWorld");
+                worldObject.transform.SetParent(parent, false);
+                worldView = worldObject.AddComponent<SectorFocusWorldView>();
+            }
+
+            sectorPresenter = FindObjectOfType<SectorFocusPresenter>();
+            if (sectorPresenter == null)
+            {
+                GameObject presenterObject = new GameObject("SectorFocusPresenter");
+                sectorPresenter = presenterObject.AddComponent<SectorFocusPresenter>();
+            }
+
+            sectorPresenter.Initialize(sectorCombat, sectorHud, worldView);
+            sectorPresenter.SetVisible(false);
+        }
+
+        private void RefreshPhaseHud()
+        {
+            if (hudView == null || runSession == null)
+            {
+                return;
+            }
+
+            RunPhase phase = runSession.Phase.CurrentPhase;
+            string hint = phase switch
+            {
+                RunPhase.Preparation => "Type for Energy. Enter = combat.",
+                RunPhase.Combat when waveManager != null => BuildCombatPhaseHint(),
+                _ => string.Empty
+            };
+
+            hudView.SetRunPhase(phase, hint);
+        }
+
+        private string BuildCombatPhaseHint()
+        {
+            int wave = Mathf.Clamp(runSession.CompletedWaves + 1, 1, runSession.MaxWaves);
+            string line = $"Wave {wave}/{runSession.MaxWaves} | A/D = sector";
+
+            if (sectorCombat == null)
+            {
+                return line;
+            }
+
+            SectorFocusSnapshot status = sectorCombat.Snapshot;
+            int displaySector = status.FocusedSector + 1;
+            line += $" | Focus {displaySector}/{status.SectorCount}";
+
+            if (!status.IsReady)
+            {
+                line += $" (arming {status.WarmupRemaining:0.1}s)";
+            }
+            else if (status.HasTarget)
+            {
+                line += " | firing";
+            }
+
+            return line;
         }
 
         private void RefreshHud()
@@ -295,6 +480,10 @@ namespace IdleTafang.UI
                 combatText = $"Base HP: {waveManager.CurrentBaseHealth}\nSpawned: {waveManager.SpawnedCount}/{waveManager.EnemiesPerWave}\nActive: {waveManager.ActiveEnemyCount}\nEscaped: {waveManager.EscapedCount}";
             }
 
+            string phaseText = runSession == null
+                ? "Phase: Unknown"
+                : $"Phase: {runSession.Phase.CurrentPhase}";
+
             string sessionText = runSession == null
                 ? "Run: Unknown"
                 : $"Run: {runSession.Result} (Completed {runSession.CompletedWaves}/{runSession.MaxWaves})";
@@ -305,13 +494,21 @@ namespace IdleTafang.UI
 
             int towerLv = buildPrototype != null ? buildPrototype.Level : 0;
             debugText.text =
-                $"Accuracy: {typingSession.Stats.Accuracy:P0}\nCombo: {typingSession.Stats.Combo}\nBest: {typingSession.Stats.BestCombo}\nEnergy: {wallet.Energy}\nGold: {wallet.Gold}\nTower Lv: {towerLv}\n{turretLine}\n{combatText}\n{sessionText}";
+                $"Accuracy: {typingSession.Stats.Accuracy:P0}\nCombo: {typingSession.Stats.Combo}\nBest: {typingSession.Stats.BestCombo}\nEnergy: {wallet.Energy}\nGold: {wallet.Gold}\nTower Lv: {towerLv}\n{turretLine}\n{phaseText}\n{combatText}\n{sessionText}";
         }
 
         private void UpdateCombatStatusPanel()
         {
             if (combatStatusPanel == null || waveManager == null || runSession == null)
             {
+                return;
+            }
+
+            if (runSession.Phase.CurrentPhase != RunPhase.Combat)
+            {
+                combatStatusPanel.UpdateBaseHealth(waveManager.CurrentBaseHealth, waveManager.MaxBaseHealth);
+                combatStatusPanel.UpdateWaveProgress(0f, 0, runSession.MaxWaves);
+                combatStatusPanel.UpdateEscapedCount(waveManager.EscapedCount);
                 return;
             }
 
@@ -356,6 +553,16 @@ namespace IdleTafang.UI
             }
 
             gameOverShown = true;
+
+            if (runSession != null && runSession.Phase.CurrentPhase != RunPhase.Settlement)
+            {
+                runSession.Phase.EnterSettlement();
+            }
+
+            if (waveManager != null)
+            {
+                waveManager.SetCombatActive(false);
+            }
 
             int completed = runSession != null ? runSession.CompletedWaves : 0;
             int max = runSession != null ? runSession.MaxWaves : 0;

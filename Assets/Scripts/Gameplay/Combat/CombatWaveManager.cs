@@ -22,6 +22,7 @@ namespace IdleTafang.Gameplay.Combat
         private int maxBaseHealth;
         private bool waveCompleteLogged;
         private bool runFailedLogged;
+        private bool combatActive;
 
         public event Action WaveCompleted;
         public event Action RunFailed;
@@ -35,6 +36,48 @@ namespace IdleTafang.Gameplay.Combat
         public int ActiveEnemyCount => activeEnemies.Count;
         public bool IsRunFailed => currentBaseHealth <= 0;
         public bool IsWaveComplete => spawnedCount >= EnemiesPerWave && activeEnemies.Count == 0;
+
+        public bool IsCombatActive => combatActive;
+
+        public void CopyActiveEnemies(List<CombatEnemy> buffer)
+        {
+            if (buffer == null)
+            {
+                return;
+            }
+
+            buffer.Clear();
+            for (int i = 0; i < activeEnemies.Count; i++)
+            {
+                CombatEnemy enemy = activeEnemies[i];
+                if (enemy != null)
+                {
+                    buffer.Add(enemy);
+                }
+            }
+        }
+
+        public bool TryGetBasePosition(out Vector3 position)
+        {
+            if (arena != null && arena.CenterPoint != null)
+            {
+                position = arena.CenterPoint.position;
+                return true;
+            }
+
+            position = default;
+            return false;
+        }
+
+        public void SetCombatActive(bool active)
+        {
+            combatActive = active;
+
+            if (!combatActive)
+            {
+                ClearActiveEnemies();
+            }
+        }
 
         public void ApplyMaxBaseHealth(int newMaxBaseHealth, bool addDeltaToCurrent)
         {
@@ -88,6 +131,11 @@ namespace IdleTafang.Gameplay.Combat
 
         private void Update()
         {
+            if (!combatActive)
+            {
+                return;
+            }
+
             if (arena == null || path == null || enemyPrefab == null || path.SpawnPoints == null || path.SpawnPoints.Length == 0 || logic == null)
             {
                 return;
@@ -168,7 +216,7 @@ namespace IdleTafang.Gameplay.Combat
             activeEnemies.Remove(enemy);
         }
 
-        private void OnDestroy()
+        private void ClearActiveEnemies()
         {
             for (int i = 0; i < activeEnemies.Count; i++)
             {
@@ -177,10 +225,16 @@ namespace IdleTafang.Gameplay.Combat
                 {
                     enemy.ReachedTarget -= OnEnemyReachedTarget;
                     enemy.Died -= OnEnemyDied;
+                    Destroy(enemy.gameObject);
                 }
             }
 
             activeEnemies.Clear();
+        }
+
+        private void OnDestroy()
+        {
+            ClearActiveEnemies();
         }
     }
 }

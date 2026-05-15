@@ -10,10 +10,18 @@ namespace IdleTafang.Gameplay.Combat
 
         private float cooldownTimer;
         private BuildPrototype prototype;
+        private bool allowFire = true;
+        private bool allowEnemyDamage;
 
         public void Bind(BuildPrototype buildPrototype)
         {
             prototype = buildPrototype;
+        }
+
+        public void SetInteractionMode(bool fireEnabled, bool enemyDamageEnabled)
+        {
+            allowFire = fireEnabled;
+            allowEnemyDamage = enemyDamageEnabled;
         }
 
         private void Awake()
@@ -26,6 +34,11 @@ namespace IdleTafang.Gameplay.Combat
 
         private void Update()
         {
+            if (!allowFire)
+            {
+                return;
+            }
+
             cooldownTimer -= Time.deltaTime;
             if (cooldownTimer > 0f)
             {
@@ -49,7 +62,7 @@ namespace IdleTafang.Gameplay.Combat
             }
 
             CombatEnemy enemy = hit.collider != null ? hit.collider.GetComponentInParent<CombatEnemy>() : null;
-            if (enemy == null)
+            if (enemy == null || !allowEnemyDamage)
             {
                 return;
             }
