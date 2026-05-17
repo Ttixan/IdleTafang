@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 4697451293266246217}
   - component: {fileID: 392480446160512969}
   - component: {fileID: 2468993213940859148}
-  - component: {fileID: 4204478698693834484}
+  - component: {fileID: 4255476258989459374}
   m_Layer: 3
   m_Name: CombatEnemyTall
   m_TagString: Untagged
@@ -42,7 +42,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 644323411116269998}
-  m_Mesh: {fileID: 10208, guid: 0000000000000000e000000000000000, type: 0}
+  m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
 --- !u!23 &392480446160512969
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -101,8 +101,8 @@ MonoBehaviour:
   reachThreshold: 0.15
   maxHealth: 5
   enemyTypeId: 1
---- !u!136 &4204478698693834484
-CapsuleCollider:
+--- !u!65 &4255476258989459374
+BoxCollider:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
@@ -119,8 +119,6 @@ CapsuleCollider:
   m_IsTrigger: 0
   m_ProvidesContacts: 0
   m_Enabled: 1
-  serializedVersion: 2
-  m_Radius: 0.65
-  m_Height: 2.5
-  m_Direction: 1
+  serializedVersion: 3
+  m_Size: {x: 1.2, y: 1.2, z: 1.2}
   m_Center: {x: 0, y: 0, z: 0}
