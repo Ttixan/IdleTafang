@@ -1,7 +1,6 @@
 using System.Collections;
 using System.Text;
 using IdleTafang.Gameplay;
-using IdleTafang.Gameplay.Typing;
 using IdleTafang.Gameplay.Builds;
 using IdleTafang.Gameplay.Combat;
 using IdleTafang.Gameplay.Resources;
@@ -35,16 +34,12 @@ namespace IdleTafang.UI
         [SerializeField] private int repairBaseEnergyCost = 10;
         [SerializeField] private int repairBaseHealAmount = 1;
 
-        private TypingSession typingSession;
-        private TypingInputRouter inputRouter;
         private ResourceWallet wallet;
-        private TypingRewardCalculator rewardCalculator;
         private BuildPrototype buildPrototype;
         private BuildService buildService;
         private CombatWaveManager waveManager;
         private SectorFocusCombatAdapter sectorCombat;
         private SectorFocusPresenter sectorPresenter;
-        private ManualTurretController manualTurret;
         private RunSession runSession;
         private readonly RunBuffState runBuffState = new RunBuffState();
         private readonly IntermissionBuffOffer[] rolledBuffOffers = new IntermissionBuffOffer[3];
@@ -71,10 +66,8 @@ namespace IdleTafang.UI
             //     debugText.gameObject.SetActive(true);
             // }
 
-            typingSession = new TypingSession();
             wallet = new ResourceWallet();
             wallet.AddGold(PersistentGold.Load());
-            rewardCalculator = new TypingRewardCalculator();
             buildPrototype = new BuildPrototype("Basic Tower", 5);
             buildService = new BuildService();
             runSession = TryGetRunSession();
@@ -92,10 +85,9 @@ namespace IdleTafang.UI
             buffRng = new System.Random();
             lastGoldReward = 0;
 
-            inputRouter = FindObjectOfType<TypingInputRouter>();
-            if (inputRouter != null)
+            if (balance != null)
             {
-                inputRouter.CharacterSubmitted += OnCharacterSubmitted;
+                wallet.AddEnergy(balance.StartingEnergy);
             }
 
             waveManager = FindObjectOfType<CombatWaveManager>();
@@ -103,6 +95,7 @@ namespace IdleTafang.UI
             {
                 waveManager.WaveCompleted += OnWaveCompleted;
                 waveManager.RunFailed += OnRunFailed;
+                waveManager.EnemyKilled += OnEnemyKilled;
                 waveManager.SetCombatActive(false);
 
                 sectorCombat = waveManager.GetComponent<SectorFocusCombatAdapter>();
@@ -123,13 +116,6 @@ namespace IdleTafang.UI
             if (runSession != null)
             {
                 runSession.Phase.PhaseChanged += OnRunPhaseChanged;
-                ApplyRunPhase(runSession.Phase.CurrentPhase);
-            }
-
-            manualTurret = FindObjectOfType<ManualTurretController>();
-            if (manualTurret != null)
-            {
-                manualTurret.Bind(buildPrototype, wallet, runBuffState);
             }
 
             if (buildPanelView != null)
@@ -151,6 +137,23 @@ namespace IdleTafang.UI
             {
                 initialMaxBaseHealth = waveManager.MaxBaseHealth;
             }
+
+            // DefaultExecutionOrder(-100) runs before SectorFocusHudView / SectorFocusWorldView Awake；
+            // 若在此处之前 ApplyRunPhase，HUD 会被 HudView.Awake 关掉、WorldView 尚未建网格。延后到 Start 再对齐战斗与扇区展示。
+            if (runSession != null)
+            {
+                ApplyRunPhase(runSession.Phase.CurrentPhase);
+            }
+
+            if (waveManager != null && runSession != null && runSession.Phase.CanRunCombat)
+            {
+                sectorCombat?.ResetFocus();
+                waveManager.StartNewWave();
+            }
+
+            RefreshDebugText();
+            RefreshHud();
+            RefreshPhaseHud();
         }
 
         private RunConfig ResolveRunConfig()
@@ -299,11 +302,6 @@ namespace IdleTafang.UI
             {
                 sectorCombat.SetSectorBuffDamageMultiplier(runBuffState.SectorProjectileDamageMultiplier);
             }
-
-            if (manualTurret != null)
-            {
-                manualTurret.Bind(buildPrototype, wallet, runBuffState);
-            }
         }
 
         private void Update()
@@ -316,11 +314,6 @@ namespace IdleTafang.UI
             }
 
             SyncCombatBuffModifiers();
-
-            if (runSession != null && runSession.Phase.CurrentPhase == RunPhase.Preparation && Input.GetButtonDown("Submit"))
-            {
-                TryBeginCombat();
-            }
 
             if (waveIntermissionActive && runSession != null && runSession.Phase.CanRunCombat && Input.GetButtonDown("Submit"))
             {
@@ -335,15 +328,11 @@ namespace IdleTafang.UI
 
         private void OnDestroy()
         {
-            if (inputRouter != null)
-            {
-                inputRouter.CharacterSubmitted -= OnCharacterSubmitted;
-            }
-
             if (waveManager != null)
             {
                 waveManager.WaveCompleted -= OnWaveCompleted;
                 waveManager.RunFailed -= OnRunFailed;
+                waveManager.EnemyKilled -= OnEnemyKilled;
             }
 
             StopWaveIntermissionCoroutine();
@@ -394,25 +383,23 @@ namespace IdleTafang.UI
             }
         }
 
-        private void OnCharacterSubmitted(char typedChar)
+        private void OnEnemyKilled(CombatEnemy enemy)
         {
-            if (runSession == null || !runSession.Phase.CanEarnEnergy)
+            if (enemy == null || wallet == null || runSession == null || gameOverShown)
             {
                 return;
             }
 
-            typingSession.SubmitCharacter(typedChar);
-
-            int energyReward = rewardCalculator.CalculateEnergyReward(typingSession.Stats);
-            wallet.AddEnergy(energyReward);
-            typingSession.Reset();
-
-            RefreshDebugText();
-            RefreshHud();
-            if (buildPanelView != null)
+            RunConfig cfg = ResolveRunConfig();
+            int waveNum = Mathf.Max(1, runSession.CompletedWaves + 1);
+            int reward = cfg != null ? cfg.GetKillEnergyReward(enemy.EnemyTypeId, waveNum) : 0;
+            if (reward <= 0)
             {
-                buildPanelView.Refresh();
+                return;
             }
+
+            wallet.AddEnergy(reward);
+            buildPanelView?.Refresh();
         }
 
         private void OnBuildChanged()
@@ -575,23 +562,6 @@ namespace IdleTafang.UI
             RefreshHud();
         }
 
-        private void TryBeginCombat()
-        {
-            if (runSession == null || runSession.IsFinished || !runSession.Phase.TryBeginCombat())
-            {
-                return;
-            }
-
-            StopWaveIntermissionCoroutine();
-
-            sectorCombat?.ResetFocus();
-
-            if (waveManager != null)
-            {
-                waveManager.StartNewWave();
-            }
-        }
-
         private void OnRunPhaseChanged(RunPhase phase)
         {
             ApplyRunPhase(phase);
@@ -600,20 +570,11 @@ namespace IdleTafang.UI
 
         private void ApplyRunPhase(RunPhase phase)
         {
-            bool preparation = phase == RunPhase.Preparation;
             bool combat = phase == RunPhase.Combat;
-            bool settlement = phase == RunPhase.Settlement;
 
             if (waveManager != null)
             {
                 waveManager.SetCombatActive(combat);
-            }
-
-            if (manualTurret != null)
-            {
-                manualTurret.SetInteractionMode(
-                    fireEnabled: preparation || combat,
-                    enemyDamageEnabled: combat);
             }
 
             if (sectorCombat != null)
@@ -674,7 +635,6 @@ namespace IdleTafang.UI
             }
 
             sectorPresenter.Initialize(sectorCombat, sectorHud, worldView);
-            sectorPresenter.SetVisible(false);
         }
 
         private void RefreshPhaseHud()
@@ -687,8 +647,8 @@ namespace IdleTafang.UI
             RunPhase phase = runSession.Phase.CurrentPhase;
             string hint = phase switch
             {
-                RunPhase.Preparation => "Type for Energy. Enter = combat.",
                 RunPhase.Combat when waveManager != null => BuildCombatPhaseHint(),
+                RunPhase.Settlement => string.Empty,
                 _ => string.Empty
             };
 
@@ -777,7 +737,7 @@ namespace IdleTafang.UI
 
         private void RefreshDebugText()
         {
-            if (debugText == null || typingSession == null)
+            if (debugText == null || wallet == null)
             {
                 return;
             }
@@ -801,14 +761,14 @@ namespace IdleTafang.UI
                 : $"Run: {runSession.Result} (Completed {runSession.CompletedWaves}/{runSession.MaxWaves})";
 
             string turretLine = buildPrototype != null
-                ? $"Turret: DMG {buildPrototype.GetTurretDamage()} | CD {buildPrototype.GetTurretFireCooldownSeconds():0.00}s | Base bonus +{buildPrototype.GetBaseHealthBonus()}"
-                : "Turret: -";
+                ? $"Auto turret: DMG {buildPrototype.GetTurretDamage()} | CD {buildPrototype.GetTurretFireCooldownSeconds():0.00}s | Base bonus +{buildPrototype.GetBaseHealthBonus()}"
+                : "Auto turret: -";
 
             string buffLine = runBuffState.BuildSummaryLine();
 
             int towerLv = buildPrototype != null ? buildPrototype.Level : 0;
             debugText.text =
-                $"Accuracy: {typingSession.Stats.Accuracy:P0}\nCombo: {typingSession.Stats.Combo}\nBest: {typingSession.Stats.BestCombo}\nEnergy: {wallet.Energy}\nGold: {wallet.Gold}\nTower Lv: {towerLv}\n{turretLine}\n{buffLine}\n{phaseText}\n{combatText}\n{sessionText}";
+                $"Energy: {wallet.Energy}\nGold: {wallet.Gold}\nTower Lv: {towerLv}\n{turretLine}\n{buffLine}\n{phaseText}\n{combatText}\n{sessionText}";
         }
 
         private void UpdateCombatStatusPanel()
@@ -919,7 +879,7 @@ namespace IdleTafang.UI
             {
                 sb.AppendLine("--- Build ---");
                 sb.AppendLine($"Tower Lv {buildPrototype.Level}");
-                sb.AppendLine($"Turret damage: {buildPrototype.GetTurretDamage()}");
+                sb.AppendLine($"Auto turret damage: {buildPrototype.GetTurretDamage()}");
                 sb.AppendLine($"Base HP bonus: +{buildPrototype.GetBaseHealthBonus()}");
                 sb.AppendLine();
             }

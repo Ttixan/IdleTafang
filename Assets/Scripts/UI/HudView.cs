@@ -150,7 +150,7 @@ namespace IdleTafang.UI
             }
 
             combatStatsText.text =
-                $"Turret DMG {turretDamage} | CD {turretCooldownSeconds:0.00}s | Base+{baseHealthBonus}";
+                $"Auto DMG {turretDamage} | CD {turretCooldownSeconds:0.00}s | Base+{baseHealthBonus}";
             RefreshTextLayout(combatStatsText);
         }
 

@@ -17,7 +17,6 @@ namespace IdleTafang.UI
         private void Awake()
         {
             EnsureBuilt();
-            gameObject.SetActive(false);
         }
 
         public void SetVisible(bool isVisible)

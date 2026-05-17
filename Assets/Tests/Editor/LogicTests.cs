@@ -231,24 +231,20 @@ namespace IdleTafang.Tests.Editor
             Assert.That(session.CompletedWaves, Is.EqualTo(0));
             Assert.That(session.Result, Is.EqualTo(RunResult.InProgress));
             Assert.That(session.IsFinished, Is.False);
-            Assert.That(session.Phase.CurrentPhase, Is.EqualTo(RunPhase.Preparation));
+            Assert.That(session.Phase.CurrentPhase, Is.EqualTo(RunPhase.Combat));
         }
 
         [Test]
-        public void RunPhaseController_GatesEnergyAndCombatTransitions()
+        public void RunPhaseController_StartsInCombat_AndGatesSettlement()
         {
             RunPhaseController phase = new RunPhaseController();
             int changeCount = 0;
             phase.PhaseChanged += _ => changeCount += 1;
 
-            Assert.That(phase.CurrentPhase, Is.EqualTo(RunPhase.Preparation));
-            Assert.That(phase.CanEarnEnergy, Is.True);
-            Assert.That(phase.CanRunCombat, Is.False);
-
-            Assert.That(phase.TryBeginCombat(), Is.True);
             Assert.That(phase.CurrentPhase, Is.EqualTo(RunPhase.Combat));
             Assert.That(phase.CanEarnEnergy, Is.False);
             Assert.That(phase.CanRunCombat, Is.True);
+
             Assert.That(phase.TryBeginCombat(), Is.False);
 
             phase.EnterSettlement();
@@ -256,8 +252,8 @@ namespace IdleTafang.Tests.Editor
             Assert.That(phase.CanRunCombat, Is.False);
 
             phase.Reset();
-            Assert.That(phase.CurrentPhase, Is.EqualTo(RunPhase.Preparation));
-            Assert.That(changeCount, Is.EqualTo(3));
+            Assert.That(phase.CurrentPhase, Is.EqualTo(RunPhase.Combat));
+            Assert.That(changeCount, Is.EqualTo(2));
         }
 
         [Test]

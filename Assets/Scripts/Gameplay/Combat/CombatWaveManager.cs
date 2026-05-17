@@ -31,6 +31,8 @@ namespace IdleTafang.Gameplay.Combat
 
         public event Action WaveCompleted;
         public event Action RunFailed;
+        /// <summary>敌人被击杀（含扇区炮与建造伤害）；逃离不计入。</summary>
+        public event Action<CombatEnemy> EnemyKilled;
 
         public int CurrentBaseHealth => currentBaseHealth;
         public int MaxBaseHealth => Mathf.Max(1, maxBaseHealth);
@@ -263,6 +265,8 @@ namespace IdleTafang.Gameplay.Combat
             {
                 return;
             }
+
+            EnemyKilled?.Invoke(enemy);
 
             enemy.ReachedTarget -= OnEnemyReachedTarget;
             enemy.Died -= OnEnemyDied;

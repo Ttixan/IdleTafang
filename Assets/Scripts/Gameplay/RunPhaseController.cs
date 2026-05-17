@@ -6,7 +6,7 @@ namespace IdleTafang.Gameplay
     {
         public event Action<RunPhase> PhaseChanged;
 
-        public RunPhase CurrentPhase { get; private set; } = RunPhase.Preparation;
+        public RunPhase CurrentPhase { get; private set; } = RunPhase.Combat;
 
         public bool CanEarnEnergy => CurrentPhase == RunPhase.Preparation;
 
@@ -16,7 +16,7 @@ namespace IdleTafang.Gameplay
 
         public void Reset()
         {
-            SetPhase(RunPhase.Preparation);
+            SetPhase(RunPhase.Combat);
         }
 
         public bool TryBeginCombat()

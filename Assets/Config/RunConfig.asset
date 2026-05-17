@@ -13,6 +13,17 @@ MonoBehaviour:
   m_Name: RunConfig
   m_EditorClassIdentifier: 
   maxWaves: 3
+  startingEnergy: 20
+  defaultKillEnergy: 2
+  killEnergyByEnemyType:
+  - enemyTypeId: 0
+    energy: 1
+  - enemyTypeId: 0
+    energy: 3
+  waveKillEnergyMultipliers:
+  - 1
+  - 1
+  - 1.1
   sectorCount: 3
   sectorSwitchWarmupSeconds: 1
   enemySpawnIntervalSeconds: 1

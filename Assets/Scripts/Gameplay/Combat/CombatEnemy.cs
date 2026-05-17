@@ -8,6 +8,7 @@ namespace IdleTafang.Gameplay.Combat
         [SerializeField] private float moveSpeed = 2f;
         [SerializeField] private float reachThreshold = 0.15f;
         [SerializeField] private int maxHealth = 5;
+        [SerializeField] private int enemyTypeId;
 
         private Transform target;
         private CombatEnemyLogic logic;
@@ -17,6 +18,9 @@ namespace IdleTafang.Gameplay.Combat
 
         public event Action<CombatEnemy> ReachedTarget;
         public event Action<CombatEnemy> Died;
+
+        /// <summary>用于 <see cref="IdleTafang.Config.RunConfig"/> 杀敌能量表Lookup。</summary>
+        public int EnemyTypeId => enemyTypeId;
 
         public int CurrentHealth => currentHealth;
         public int MaxHealth => Mathf.Max(1, maxHealth);
