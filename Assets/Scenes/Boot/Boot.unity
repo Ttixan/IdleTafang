@@ -246,6 +246,7 @@ MonoBehaviour:
   bootSceneName: Boot
   mainMenuSceneName: MainMenu
   runSceneName: Run
+  runConfig: {fileID: 11400000, guid: 18e1437ad3ae3a14d9dc652e3bd64a00, type: 2}
 --- !u!4 &1017077497
 Transform:
   m_ObjectHideFlags: 0
