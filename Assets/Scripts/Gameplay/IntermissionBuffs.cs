@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Text;
 using UnityEngine;
 
 namespace IdleTafang.Gameplay
@@ -148,12 +150,22 @@ namespace IdleTafang.Gameplay
         }
     }
 
-    /// <summary>整局叠加的强化层数（E5）。</summary>
+    /// <summary>整局叠加的强化层数（E5）；并记录每次波间选购便于结算/HUD（E7）。</summary>
     public sealed class RunBuffState
     {
+        private readonly List<string> purchaseHistory = new List<string>();
+
         public int SectorDamageTenPercentStacks { get; private set; }
         public int SpecialEnergyMinusStacks { get; private set; }
         public int LeakDamageMinusStacks { get; private set; }
+
+        public IReadOnlyList<string> PurchaseHistory => purchaseHistory;
+
+        public int PurchaseCount => purchaseHistory.Count;
+
+        /// <summary>是否已有任意叠层（数值层面）。</summary>
+        public bool HasAnyStacks =>
+            SectorDamageTenPercentStacks > 0 || SpecialEnergyMinusStacks > 0 || LeakDamageMinusStacks > 0;
 
         /// <summary>扇区投射伤害倍率。</summary>
         public float SectorProjectileDamageMultiplier => 1f + 0.1f * SectorDamageTenPercentStacks;
@@ -163,6 +175,7 @@ namespace IdleTafang.Gameplay
             SectorDamageTenPercentStacks = 0;
             SpecialEnergyMinusStacks = 0;
             LeakDamageMinusStacks = 0;
+            purchaseHistory.Clear();
         }
 
         public void ApplyOffer(in IntermissionBuffOffer offer)
@@ -179,6 +192,8 @@ namespace IdleTafang.Gameplay
                     LeakDamageMinusStacks += 1;
                     break;
             }
+
+            purchaseHistory.Add($"{offer.DisplayName} [{offer.Rarity}, {offer.EnergyCost}E]");
         }
 
         public int DiscountSpecialEnergyCost(int baseCost)
@@ -190,6 +205,100 @@ namespace IdleTafang.Gameplay
         {
             return
                 $"Buffs: Sector×{SectorProjectileDamageMultiplier:0.##} | SpecE-{SpecialEnergyMinusStacks} | Leak-{LeakDamageMinusStacks}";
+        }
+
+        /// <summary>左侧 HUD 多行展示（E7）。</summary>
+        public string BuildHudMultiline()
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("Intermission buffs (run)");
+            sb.AppendLine(BuildStackLines());
+            if (purchaseHistory.Count == 0)
+            {
+                sb.Append("Purchases: none");
+            }
+            else
+            {
+                sb.AppendLine("Purchases:");
+                for (int i = 0; i < purchaseHistory.Count; i++)
+                {
+                    sb.Append("  ").Append(i + 1).Append(". ").AppendLine(purchaseHistory[i]);
+                }
+            }
+
+            return sb.ToString().TrimEnd();
+        }
+
+        /// <summary>结算面板用的强化摘要（E7）。</summary>
+        public string BuildSettlementSection()
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("--- Intermission build ---");
+            sb.AppendLine(BuildStackLines());
+            if (purchaseHistory.Count == 0)
+            {
+                sb.Append("Purchases: none");
+            }
+            else
+            {
+                sb.AppendLine("Purchases:");
+                for (int i = 0; i < purchaseHistory.Count; i++)
+                {
+                    sb.Append("  ").Append(i + 1).Append(". ").AppendLine(purchaseHistory[i]);
+                }
+            }
+
+            return sb.ToString().TrimEnd();
+        }
+
+        /// <summary>波间面板底部携带状态一行。</summary>
+        public string BuildCarriedFootnote()
+        {
+            string stacks = HasAnyStacks ? BuildSummaryLine() : "Stacks: none";
+            string picks = PurchaseCount == 0 ? "Purchases: 0" : $"Purchases: {PurchaseCount}";
+            return stacks + "\n" + picks;
+        }
+
+        private string BuildStackLines()
+        {
+            if (!HasAnyStacks)
+            {
+                return "Stacks: none";
+            }
+
+            var sb = new StringBuilder();
+            sb.Append("Stacks:");
+            bool first = true;
+
+            void AppendSegment(string segment)
+            {
+                if (first)
+                {
+                    sb.Append(' ').Append(segment);
+                    first = false;
+                }
+                else
+                {
+                    sb.Append(" | ").Append(segment);
+                }
+            }
+
+            if (SectorDamageTenPercentStacks > 0)
+            {
+                AppendSegment($"Sector +10%x{SectorDamageTenPercentStacks} (×{SectorProjectileDamageMultiplier:0.##})");
+            }
+
+            if (SpecialEnergyMinusStacks > 0)
+            {
+                AppendSegment($"Spec {-SpecialEnergyMinusStacks}E");
+            }
+
+            if (LeakDamageMinusStacks > 0)
+            {
+                AppendSegment($"Leak -{LeakDamageMinusStacks}");
+            }
+
+            return sb.ToString();
         }
     }
 }

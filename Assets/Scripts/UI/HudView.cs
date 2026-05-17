@@ -7,12 +7,13 @@ namespace IdleTafang.UI
 {
     public sealed class HudView : MonoBehaviour
     {
-        private const float LayoutTextWidth = 300f;
+        private const float LayoutTextWidth = 340f;
 
         [SerializeField] private GameObject root;
         [SerializeField] private TMP_Text energyText;
         [SerializeField] private TMP_Text goldText;
         [SerializeField] private TMP_Text combatStatsText;
+        [SerializeField] private TMP_Text runBuffsText;
         [SerializeField] private TMP_Text phaseText;
 
         private void Awake()
@@ -54,6 +55,18 @@ namespace IdleTafang.UI
                 }
             }
 
+            if (runBuffsText == null)
+            {
+                Transform t = transform.Find("RunBuffsText");
+                if (t != null)
+                {
+                    runBuffsText = t.GetComponent<TMP_Text>();
+                }
+            }
+
+            EnsureRunBuffsTextFallback();
+            ConfigureRunBuffsTextStyle();
+
             if (phaseText == null)
             {
                 Transform t = transform.Find("PhaseText");
@@ -72,7 +85,34 @@ namespace IdleTafang.UI
             EnsureLayoutableText(energyText);
             EnsureLayoutableText(goldText);
             EnsureLayoutableText(combatStatsText);
+            EnsureLayoutableText(runBuffsText);
             EnsureLayoutableText(phaseText);
+        }
+
+        private void EnsureRunBuffsTextFallback()
+        {
+            if (runBuffsText != null)
+            {
+                return;
+            }
+
+            GameObject go = new GameObject("RunBuffsText", typeof(RectTransform));
+            go.transform.SetParent(transform, false);
+            runBuffsText = go.AddComponent<TextMeshProUGUI>();
+            runBuffsText.alignment = TextAlignmentOptions.TopLeft;
+            runBuffsText.enableWordWrapping = true;
+            runBuffsText.text = string.Empty;
+        }
+
+        private void ConfigureRunBuffsTextStyle()
+        {
+            if (runBuffsText == null)
+            {
+                return;
+            }
+
+            runBuffsText.fontSize = 20f;
+            runBuffsText.color = Color.black;
         }
 
         public void SetVisible(bool visible)
@@ -112,6 +152,18 @@ namespace IdleTafang.UI
             combatStatsText.text =
                 $"Turret DMG {turretDamage} | CD {turretCooldownSeconds:0.00}s | Base+{baseHealthBonus}";
             RefreshTextLayout(combatStatsText);
+        }
+
+        /// <summary>E7：波间强化叠层与选购记录。</summary>
+        public void SetRunBuffsSummary(string multilineOrEmpty)
+        {
+            if (runBuffsText == null)
+            {
+                return;
+            }
+
+            runBuffsText.text = string.IsNullOrEmpty(multilineOrEmpty) ? string.Empty : multilineOrEmpty;
+            RefreshTextLayout(runBuffsText);
         }
 
         public void SetRunPhase(RunPhase phase, string hint = null)

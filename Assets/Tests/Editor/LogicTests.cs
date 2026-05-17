@@ -110,6 +110,8 @@ namespace IdleTafang.Tests.Editor
 
             buff.ApplyOffer(IntermissionBuffCatalog.All[2]);
             Assert.That(buff.LeakDamageMinusStacks, Is.EqualTo(1));
+            Assert.That(buff.PurchaseCount, Is.EqualTo(3));
+            Assert.That(buff.BuildSettlementSection(), Does.Contain("Sharpened sectors"));
         }
 
         [Test]
@@ -330,21 +332,27 @@ namespace IdleTafang.Tests.Editor
         }
 
         [Test]
-        public void CombatWaveManagerLogic_CyclesSpawnPointsAtInterval()
+        public void CombatWaveManagerLogic_ShufflesSpawnSlotsWithoutReplacementUntilReshuffle()
         {
-            CombatWaveManagerLogic logic = new CombatWaveManagerLogic(1f);
+            System.Random seeded = new System.Random(12345);
+            CombatWaveManagerLogic logic = new CombatWaveManagerLogic(1f, seeded);
 
             Assert.That(logic.Tick(0.5f, 3, out int spawnIndex), Is.False);
             Assert.That(spawnIndex, Is.EqualTo(-1));
 
             Assert.That(logic.Tick(0.5f, 3, out spawnIndex), Is.True);
-            Assert.That(spawnIndex, Is.EqualTo(0));
+            Assert.That(spawnIndex, Is.InRange(0, 2));
 
-            Assert.That(logic.Tick(1f, 3, out spawnIndex), Is.True);
-            Assert.That(spawnIndex, Is.EqualTo(1));
+            Assert.That(logic.Tick(1f, 3, out int idx2), Is.True);
+            Assert.That(idx2, Is.InRange(0, 2));
 
-            Assert.That(logic.Tick(1f, 3, out spawnIndex), Is.True);
-            Assert.That(spawnIndex, Is.EqualTo(2));
+            Assert.That(logic.Tick(1f, 3, out int idx3), Is.True);
+            Assert.That(idx3, Is.InRange(0, 2));
+
+            Assert.That(spawnIndex == idx2 || spawnIndex == idx3 || idx2 == idx3, Is.False,
+                "Three draws without reshuffle should cover three distinct slots.");
+
+            Assert.That(logic.Tick(1f, 3, out _), Is.True);
         }
 
         [Test]

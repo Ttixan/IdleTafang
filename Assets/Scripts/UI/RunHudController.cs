@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Text;
 using IdleTafang.Gameplay;
 using IdleTafang.Gameplay.Typing;
 using IdleTafang.Gameplay.Builds;
@@ -201,13 +202,16 @@ namespace IdleTafang.UI
 
             int nextWave = Mathf.Clamp(runSession.CompletedWaves + 1, 1, runSession.MaxWaves);
 
+            string rule = intermissionBuffChosen
+                ? "Buff locked for this break. You can still repair the base. Tap Continue when ready."
+                : "Pick ONE buff below (optional). Repair if needed. Tap Continue to start the next wave.";
+            string carrying = runBuffState.BuildCarriedFootnote();
+
             panel.SetTexts(
                 "Wave break — spend Energy, then tap Continue.",
                 $"Energy: {wallet.Energy}",
                 $"Next wave: {nextWave} / {runSession.MaxWaves}",
-                intermissionBuffChosen
-                    ? "Buff locked for this break. You can still repair the base. Tap Continue when ready."
-                    : "Pick ONE buff below (optional). Repair if needed. Tap Continue to start the next wave.");
+                $"{rule}\n---\nCarrying:\n{carrying}");
 
             bool canRepair = wallet.Energy >= repairBaseEnergyCost
                 && waveManager.CurrentBaseHealth < waveManager.MaxBaseHealth;
@@ -664,6 +668,11 @@ namespace IdleTafang.UI
 
         private void RefreshHud()
         {
+            if (gameOverShown)
+            {
+                return;
+            }
+
             if (hudView == null || wallet == null)
             {
                 return;
@@ -678,6 +687,8 @@ namespace IdleTafang.UI
                     buildPrototype.GetTurretFireCooldownSeconds(),
                     buildPrototype.GetBaseHealthBonus());
             }
+
+            hudView.SetRunBuffsSummary(runBuffState.BuildHudMultiline());
         }
 
         private void ApplyUpgradeEffects()
@@ -818,22 +829,45 @@ namespace IdleTafang.UI
                 waveManager.SetCombatActive(false);
             }
 
+            if (hudView != null)
+            {
+                hudView.SetVisible(false);
+            }
+
+            if (combatStatusPanel != null)
+            {
+                combatStatusPanel.gameObject.SetActive(false);
+            }
+
+            sectorPresenter?.SetVisible(false);
+
             int completed = runSession != null ? runSession.CompletedWaves : 0;
             int max = runSession != null ? runSession.MaxWaves : 0;
             int escaped = waveManager != null ? waveManager.EscapedCount : 0;
-            string rewardLine = victory ? $"Gold +{lastGoldReward}" : "Gold +0";
-            string buildLine = buildPrototype != null
-                ? $"Tower Lv {buildPrototype.Level} | Turret DMG {buildPrototype.GetTurretDamage()} | Base+{buildPrototype.GetBaseHealthBonus()}"
-                : string.Empty;
-            string buffLine = runBuffState.BuildSummaryLine();
-            string summary = string.IsNullOrEmpty(buildLine)
-                ? $"Waves: {completed}/{max}\nEscaped: {escaped}\n{rewardLine}\nTotal Gold: {wallet.Gold}"
-                : $"Waves: {completed}/{max}\nEscaped: {escaped}\n{rewardLine}\n{buildLine}\nTotal Gold: {wallet.Gold}";
+            string rewardLine = victory ? $"Reward: +{lastGoldReward} gold" : "Reward: +0 gold";
+            string buffSection = runBuffState.BuildSettlementSection();
 
-            if (!string.IsNullOrEmpty(buffLine))
+            var sb = new StringBuilder();
+            sb.AppendLine("--- Run summary ---");
+            sb.AppendLine($"Waves: {completed} / {max}");
+            sb.AppendLine($"Escaped: {escaped}");
+            sb.AppendLine(rewardLine);
+            sb.AppendLine();
+
+            if (buildPrototype != null)
             {
-                summary += $"\n{buffLine}";
+                sb.AppendLine("--- Build ---");
+                sb.AppendLine($"Tower Lv {buildPrototype.Level}");
+                sb.AppendLine($"Turret damage: {buildPrototype.GetTurretDamage()}");
+                sb.AppendLine($"Base HP bonus: +{buildPrototype.GetBaseHealthBonus()}");
+                sb.AppendLine();
             }
+
+            sb.AppendLine($"Total gold: {wallet.Gold}");
+            sb.AppendLine();
+            sb.Append(buffSection.TrimEnd());
+
+            string summary = sb.ToString();
 
             if (gameOverPanelView != null)
             {
