@@ -1,5 +1,6 @@
 using System;
 using IdleTafang.Gameplay;
+using IdleTafang.Config;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using IdleTafang.UI;
@@ -13,6 +14,7 @@ namespace IdleTafang.Core
         [SerializeField] private string bootSceneName = "Boot";
         [SerializeField] private string mainMenuSceneName = "MainMenu";
         [SerializeField] private string runSceneName = "Run";
+        [SerializeField] private RunConfig runConfig;
 
         private GameLoop gameLoop;
         private SceneFlowState bootState;
@@ -23,6 +25,8 @@ namespace IdleTafang.Core
         private RunSession runSession;
 
         public RunSession RunSession => runSession;
+
+        public RunConfig RunBalanceConfig => runConfig;
 
         private void Awake()
         {
@@ -87,7 +91,12 @@ namespace IdleTafang.Core
 
         private void OnRunSceneEntered()
         {
-            runSession.Reset();
+            if (runSession != null)
+            {
+                int mw = runConfig != null ? runConfig.MaxWaves : 5;
+                runSession.ConfigureMaxWaves(mw);
+                runSession.Reset();
+            }
         }
 
         private sealed class SceneFlowState : IGameState

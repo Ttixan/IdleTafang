@@ -6,12 +6,14 @@ using IdleTafang.Gameplay.Builds;
 using IdleTafang.Gameplay.Combat;
 using IdleTafang.Gameplay.Resources;
 using IdleTafang.Core;
+using IdleTafang.Config;
 using UnityEngine;
 using TMPro;
 using UnityEngine.SceneManagement;
 
 namespace IdleTafang.UI
 {
+    [DefaultExecutionOrder(-100)]
     public sealed class RunHudController : MonoBehaviour
     {
         [SerializeField] private HudView hudView;
@@ -23,6 +25,12 @@ namespace IdleTafang.UI
         [Header("Wave intermission shop (E2–E6)")]
         [Tooltip("留空则在运行时挂到主 Canvas 下自动生成波间面板。")]
         [SerializeField] private WaveIntermissionPanelView waveIntermissionPanel;
+
+        [Header("Balance config (F)")]
+        [Tooltip("若赋值则覆盖 GameBootstrap 上的 RunConfig。")]
+        [SerializeField] private RunConfig runConfigOverride;
+
+        [SerializeField] private BuffPoolConfig buffPoolConfig;
 
         [SerializeField] private int repairBaseEnergyCost = 10;
         [SerializeField] private int repairBaseHealAmount = 1;
@@ -70,6 +78,15 @@ namespace IdleTafang.UI
             buildPrototype = new BuildPrototype("Basic Tower", 5);
             buildService = new BuildService();
             runSession = TryGetRunSession();
+
+            RunConfig balance = ResolveRunConfig();
+            ApplyRunBalanceToScene(balance);
+
+            if (balance != null && runSession != null)
+            {
+                runSession.ConfigureMaxWaves(balance.MaxWaves);
+            }
+
             runSession.Reset();
             runBuffState.Reset();
             buffRng = new System.Random();
@@ -87,12 +104,16 @@ namespace IdleTafang.UI
                 waveManager.WaveCompleted += OnWaveCompleted;
                 waveManager.RunFailed += OnRunFailed;
                 waveManager.SetCombatActive(false);
-                initialMaxBaseHealth = waveManager.MaxBaseHealth;
 
                 sectorCombat = waveManager.GetComponent<SectorFocusCombatAdapter>();
                 if (sectorCombat == null)
                 {
                     sectorCombat = waveManager.gameObject.AddComponent<SectorFocusCombatAdapter>();
+                }
+
+                if (balance != null)
+                {
+                    sectorCombat.ApplyExternalSectorConfig(balance.SectorCount, balance.SectorSwitchWarmupSeconds);
                 }
 
                 sectorCombat.Bind(waveManager, buildPrototype);
@@ -122,6 +143,46 @@ namespace IdleTafang.UI
             RefreshDebugText();
             RefreshHud();
             SyncCombatBuffModifiers();
+        }
+
+        private void Start()
+        {
+            if (waveManager != null)
+            {
+                initialMaxBaseHealth = waveManager.MaxBaseHealth;
+            }
+        }
+
+        private RunConfig ResolveRunConfig()
+        {
+            if (runConfigOverride != null)
+            {
+                return runConfigOverride;
+            }
+
+            return GameBootstrap.Instance != null ? GameBootstrap.Instance.RunBalanceConfig : null;
+        }
+
+        private BuffPoolWeights ResolveBuffWeights()
+        {
+            return buffPoolConfig != null ? buffPoolConfig.Weights : BuffPoolWeights.Default;
+        }
+
+        private void ApplyRunBalanceToScene(RunConfig cfg)
+        {
+            if (cfg == null)
+            {
+                return;
+            }
+
+            repairBaseEnergyCost = cfg.RepairBaseEnergyCost;
+            repairBaseHealAmount = cfg.RepairBaseHealAmount;
+
+            CombatPath path = FindObjectOfType<CombatPath>();
+            path?.ApplyRuntimeSectorCount(cfg.SectorCount);
+
+            CombatWaveManager wm = FindObjectOfType<CombatWaveManager>();
+            wm?.ApplyRunConfig(cfg);
         }
 
         private WaveIntermissionPanelView ResolveIntermissionPanel()
@@ -398,7 +459,7 @@ namespace IdleTafang.UI
             waveIntermissionActive = true;
             intermissionContinueRequested = false;
             intermissionBuffChosen = false;
-            IntermissionBuffCatalog.FillThreeShuffledOffers(buffRng, rolledBuffOffers);
+            IntermissionBuffCatalog.FillThreeOffers(buffRng, rolledBuffOffers, ResolveBuffWeights());
 
             if (waveManager != null)
             {

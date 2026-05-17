@@ -20,6 +20,7 @@ namespace IdleTafang.Gameplay.Combat
         ProceduralSectorArcs
     }
 
+    [DefaultExecutionOrder(50)]
     public sealed class CombatPath : MonoBehaviour
     {
         private const string GeneratedRootName = "GeneratedSpawns";
@@ -139,6 +140,12 @@ namespace IdleTafang.Gameplay.Combat
             }
 
             RebuildSpawnPoints();
+        }
+
+        /// <summary>F1：与 RunConfig 对齐扇区数量（仅写字段；程序化布局在 Awake 中再生）。须早于本组件 Awake 调用。</summary>
+        public void ApplyRuntimeSectorCount(int count)
+        {
+            sectorCount = Mathf.Max(1, count);
         }
 
         /// <summary>手动刷新程序化点（例如运行时改波次规则前调用）。</summary>

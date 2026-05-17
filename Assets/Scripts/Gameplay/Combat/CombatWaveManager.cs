@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using IdleTafang.Config;
 using IdleTafang.Gameplay.Resources;
 using UnityEngine;
 
 namespace IdleTafang.Gameplay.Combat
 {
+    [DefaultExecutionOrder(50)]
     public sealed class CombatWaveManager : MonoBehaviour
     {
         [SerializeField] private CombatArena arena;
@@ -14,6 +16,7 @@ namespace IdleTafang.Gameplay.Combat
         [SerializeField] private int enemiesPerWave = 12;
         [SerializeField] private int baseHealth = 5;
         [SerializeField] private int enemyDamageOnReach = 1;
+        [SerializeField] private float enemyHpMultiplier = 1f;
 
         private CombatWaveManagerLogic logic;
         private readonly List<CombatEnemy> activeEnemies = new List<CombatEnemy>();
@@ -67,6 +70,24 @@ namespace IdleTafang.Gameplay.Combat
 
             currentBaseHealth = Mathf.Min(maxBaseHealth, currentBaseHealth + healAmount);
             return true;
+        }
+
+        /// <summary>F1/F2/F5：由 Run 开局从 <see cref="RunConfig"/> 注入，须在 Awake 前执行（配合 <see cref="RunHudController"/> 更早执行序）。</summary>
+        public void ApplyRunConfig(RunConfig cfg)
+        {
+            if (cfg == null)
+            {
+                return;
+            }
+
+            spawnInterval = cfg.EnemySpawnIntervalSeconds;
+            enemiesPerWave = cfg.EnemiesPerWave;
+            baseHealth = cfg.StartingBaseHealth;
+            enemyDamageOnReach = cfg.EnemyDamageOnReach;
+            enemyHpMultiplier = cfg.EnemyHpMultiplier;
+            logic = new CombatWaveManagerLogic(spawnInterval);
+            maxBaseHealth = Mathf.Max(1, baseHealth);
+            currentBaseHealth = maxBaseHealth;
         }
 
         public void CopyActiveEnemies(List<CombatEnemy> buffer)
@@ -190,6 +211,7 @@ namespace IdleTafang.Gameplay.Combat
                 enemy.ReachedTarget += OnEnemyReachedTarget;
                 enemy.Died += OnEnemyDied;
                 enemy.SetTarget(arena.CenterPoint);
+                enemy.ApplySpawnDifficultyMultiplier(enemyHpMultiplier);
                 activeEnemies.Add(enemy);
                 spawnedCount += 1;
             }

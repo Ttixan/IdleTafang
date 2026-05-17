@@ -5,6 +5,7 @@ using UnityEngine;
 
 namespace IdleTafang.Gameplay.Combat
 {
+    [DefaultExecutionOrder(50)]
     public sealed class SectorFocusCombatAdapter : MonoBehaviour
     {
         [SerializeField] private CombatWaveManager waveManager;
@@ -37,8 +38,16 @@ namespace IdleTafang.Gameplay.Combat
 
         public SectorFocusSnapshot Snapshot => system != null ? system.Snapshot : SectorFocusSnapshot.Idle(sectorCount);
 
+        /// <summary>F1：由 Run 开局注入扇区数与预热（须在 <see cref="Bind"/> / 首次 Tick 前调用）。</summary>
+        public void ApplyExternalSectorConfig(int sectors, float warmupSeconds)
+        {
+            sectorCount = Mathf.Max(1, sectors);
+            switchWarmupSeconds = Mathf.Max(0f, warmupSeconds);
+        }
+
         public void Bind(CombatWaveManager manager, BuildPrototype prototype)
         {
+            EnsureSystemInitialized();
             waveManager = manager;
             buildPrototype = prototype;
             ApplyTurretStats();
@@ -59,6 +68,21 @@ namespace IdleTafang.Gameplay.Combat
             sectorBuffDamageMultiplier = Mathf.Max(0f, multiplier);
         }
 
+        private bool systemInitialized;
+
+        private void EnsureSystemInitialized()
+        {
+            if (systemInitialized)
+            {
+                return;
+            }
+
+            systemInitialized = true;
+            system = new SectorFocusSystem(sectorCount, switchWarmupSeconds, baseDamage, baseFireCooldownSeconds);
+            system.SnapshotChanged += OnSystemSnapshotChanged;
+            OnSystemSnapshotChanged(system.Snapshot);
+        }
+
         private void Awake()
         {
             ResolveWaveManager();
@@ -70,10 +94,6 @@ namespace IdleTafang.Gameplay.Combat
                     $"Multiple SectorFocusCombatAdapter on '{name}'. Keep only one to avoid duplicate input.",
                     this);
             }
-
-            system = new SectorFocusSystem(sectorCount, switchWarmupSeconds, baseDamage, baseFireCooldownSeconds);
-            system.SnapshotChanged += OnSystemSnapshotChanged;
-            OnSystemSnapshotChanged(system.Snapshot);
         }
 
         private void OnDestroy()
@@ -86,6 +106,7 @@ namespace IdleTafang.Gameplay.Combat
 
         private void Update()
         {
+            EnsureSystemInitialized();
             ResolveWaveManager();
             if (system == null || waveManager == null || !waveManager.IsCombatActive)
             {

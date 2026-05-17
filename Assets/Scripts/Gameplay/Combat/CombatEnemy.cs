@@ -96,5 +96,15 @@ namespace IdleTafang.Gameplay.Combat
                 Destroy(gameObject);
             }
         }
+
+        /// <summary>F2：按难度倍率缩放血量（相对预制体上的设计血量）。</summary>
+        public void ApplySpawnDifficultyMultiplier(float multiplier)
+        {
+            multiplier = Mathf.Max(0.01f, multiplier);
+            int design = Mathf.Max(1, maxHealth);
+            int scaled = Mathf.Max(1, Mathf.RoundToInt(design * multiplier));
+            maxHealth = scaled;
+            currentHealth = scaled;
+        }
     }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using IdleTafang.Config;
 using UnityEngine;
 
 namespace IdleTafang.Gameplay
@@ -104,33 +105,73 @@ namespace IdleTafang.Gameplay
 
         public static int RarityPickWeight(IntermissionBuffRarity rarity)
         {
-            return rarity switch
-            {
-                IntermissionBuffRarity.Common => 60,
-                IntermissionBuffRarity.Rare => 30,
-                IntermissionBuffRarity.Epic => 10,
-                _ => 1
-            };
+            return BuffPoolWeights.Default.WeightFor(rarity);
         }
 
         /// <summary>
-        /// 将 <see cref="All"/> 拷贝到 <paramref name="dst"/> 并随机打乱展示顺序（三条互不重复）。
-        /// 后续可改为带放回权重抽取（E5）。
+        /// 按稀有度权重从无放回池中抽满 <paramref name="dst"/> 前半段，再打乱展示顺序（F3）。
         /// </summary>
-        public static void FillThreeShuffledOffers(System.Random rng, IntermissionBuffOffer[] dst)
+        public static void FillThreeOffers(
+            System.Random rng,
+            IntermissionBuffOffer[] dst,
+            BuffPoolWeights weights,
+            IntermissionBuffOffer[] pool = null)
         {
-            if (rng == null || dst == null || All.Length == 0)
+            pool ??= All;
+            if (rng == null || dst == null || pool.Length == 0)
             {
                 return;
             }
 
-            int n = Mathf.Min(dst.Length, All.Length);
-            for (int i = 0; i < n; i++)
+            int pickCount = Mathf.Min(dst.Length, pool.Length);
+            var available = new List<(IntermissionBuffOffer offer, int w)>(pool.Length);
+            for (int i = 0; i < pool.Length; i++)
             {
-                dst[i] = All[i];
+                IntermissionBuffOffer o = pool[i];
+                available.Add((o, weights.WeightFor(o.Rarity)));
             }
 
-            ShuffleOfferOrder(rng, dst, n);
+            for (int slot = 0; slot < pickCount; slot++)
+            {
+                int sum = 0;
+                for (int i = 0; i < available.Count; i++)
+                {
+                    sum += available[i].w;
+                }
+
+                if (sum <= 0)
+                {
+                    sum = available.Count;
+                    for (int i = 0; i < available.Count; i++)
+                    {
+                        available[i] = (available[i].offer, 1);
+                    }
+                }
+
+                int roll = rng.Next(sum);
+                int acc = 0;
+                int chosen = 0;
+                for (int i = 0; i < available.Count; i++)
+                {
+                    acc += available[i].w;
+                    if (roll < acc)
+                    {
+                        chosen = i;
+                        break;
+                    }
+                }
+
+                dst[slot] = available[chosen].offer;
+                available.RemoveAt(chosen);
+            }
+
+            ShuffleOfferOrder(rng, dst, pickCount);
+        }
+
+        /// <summary>等价于 <see cref="FillThreeOffers"/> + 默认 60/30/10 权重。</summary>
+        public static void FillThreeShuffledOffers(System.Random rng, IntermissionBuffOffer[] dst)
+        {
+            FillThreeOffers(rng, dst, BuffPoolWeights.Default);
         }
 
         /// <summary>洗牌展示顺序（仅打乱前 <paramref name="count"/> 项）。</summary>

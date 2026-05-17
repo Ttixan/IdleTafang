@@ -115,7 +115,17 @@ namespace IdleTafang.Tests.Editor
         }
 
         [Test]
-        public void IntermissionBuffCatalog_FillThreeShuffledOffers_IsPermutationOfCatalog()
+        public void RunSession_ConfigureMaxWaves_PersistsThroughReset()
+        {
+            RunSession session = new RunSession();
+            session.ConfigureMaxWaves(7);
+            session.Reset();
+
+            Assert.That(session.MaxWaves, Is.EqualTo(7));
+        }
+
+        [Test]
+        public void IntermissionBuffCatalog_FillThreeOffers_DefaultWeights_IsPermutationOfCatalog()
         {
             IntermissionBuffOffer[] rolled = new IntermissionBuffOffer[3];
             IntermissionBuffCatalog.FillThreeShuffledOffers(new System.Random(42), rolled);
